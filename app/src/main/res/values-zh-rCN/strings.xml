@@ -316,4 +316,33 @@
     <string name="emoji_skin_tone_type_6">🏿 深肤色 (Type-6)</string>
     <string name="hide_unsupported_emojis">隐藏不支持的表情</string>
     <string name="key_border_stroke">启用按键边框描边</string>
+    <!-- SyncClipboard -->
+    <string name="sync_clipboard">剪切板同步</string>
+    <string name="sync_clipboard_enabled">启用剪切板同步</string>
+    <string name="sync_clipboard_url">服务器地址</string>
+    <string name="sync_clipboard_username">用户名</string>
+    <string name="sync_clipboard_password">密码</string>
+    <string name="sync_clipboard_interval">同步间隔</string>
+    <!-- Image clipboard -->
+    <string name="clipboard_image">[图片] 点击粘贴</string>
+    <string name="clipboard_image_simple">图片</string>
+    <!-- 验证码提取 -->
+    <string name="verification_code">验证码提取</string>
+    <string name="verification_code_enabled">启用验证码提取</string>
+    <string name="verification_code_auto_fill">自动填充验证码</string>
+    <string name="verification_code_extraction_mode">提取模式</string>
+    <string name="verification_code_mode_local">本地（正则）</string>
+    <string name="verification_code_mode_ai">AI（OpenAI API）</string>
+    <string name="verification_code_openai_url">API 地址</string>
+    <string name="verification_code_openai_key">API 密钥</string>
+    <string name="verification_code_openai_model">模型</string>
+    <string name="verification_code_openai_prompt">提示词模板</string>
+    <string name="verification_code_keywords">触发关键词</string>
+    <string name="verification_code_keywords_manage">管理关键词</string>
+    <string name="verification_code_notification_access">需要通知访问权限</string>
+    <string name="verification_code_notification_access_desc">此功能需要通知访问权限以监听短信。请在系统设置中开启。</string>
+    <string name="verification_code_grant_access">前往开启</string>
+    <string name="verification_code_extracted">已提取验证码：%1$s</string>
+    <string name="verification_code_copied">验证码已复制到剪贴板</string>
 </resources>
+

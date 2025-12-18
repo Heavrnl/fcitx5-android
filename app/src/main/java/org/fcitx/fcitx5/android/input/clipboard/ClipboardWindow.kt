@@ -1,16 +1,20 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2024 Fcitx5 for Android Contributors
  */
 package org.fcitx.fcitx5.android.input.clipboard
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.PopupMenu
 import androidx.annotation.Keep
+import androidx.core.content.FileProvider
 import androidx.core.text.bold
 import androidx.core.text.buildSpannedString
 import androidx.core.text.color
@@ -27,7 +31,7 @@ import com.google.android.material.snackbar.SnackbarContentLayout
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.R
-import org.fcitx.fcitx5.android.data.clipboard.ClipboardManager
+import org.fcitx.fcitx5.android.data.clipboard.ClipboardManager as AppClipboardManager
 import org.fcitx.fcitx5.android.data.clipboard.db.ClipboardEntry
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
@@ -52,6 +56,8 @@ import org.mechdancer.dependency.manager.must
 import splitties.dimensions.dp
 import splitties.resources.styledColor
 import splitties.views.dsl.core.withTheme
+import timber.log.Timber
+import java.io.File
 
 class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
 
@@ -82,7 +88,7 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
     private val clipboardEntryRadius by ThemeManager.prefs.clipboardEntryRadius
 
     private val clipboardEntriesPager by lazy {
-        Pager(PagingConfig(pageSize = 16)) { ClipboardManager.allEntries() }
+        Pager(PagingConfig(pageSize = 16)) { AppClipboardManager.allEntries() }
     }
     private var adapterSubmitJob: Job? = null
 
@@ -93,11 +99,11 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
             clipboardMaskSensitive
         ) {
             override fun onPin(id: Int) {
-                service.lifecycleScope.launch { ClipboardManager.pin(id) }
+                service.lifecycleScope.launch { AppClipboardManager.pin(id) }
             }
 
             override fun onUnpin(id: Int) {
-                service.lifecycleScope.launch { ClipboardManager.unpin(id) }
+                service.lifecycleScope.launch { AppClipboardManager.unpin(id) }
             }
 
             override fun onEdit(id: Int) {
@@ -105,9 +111,34 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
             }
 
             override fun onShare(entry: ClipboardEntry) {
-                val target = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, entry.text)
+                val target = if (entry.isImage) {
+                    // 分享图片
+                    try {
+                        val imageFile = File(entry.imagePath)
+                        val imageUri = FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            imageFile
+                        )
+                        Intent(Intent.ACTION_SEND).apply {
+                            type = "image/*"
+                            putExtra(Intent.EXTRA_STREAM, imageUri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to create share intent for image")
+                        // fallback to text share
+                        Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, entry.text)
+                        }
+                    }
+                } else {
+                    // 分享文本
+                    Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, entry.text)
+                    }
                 }
                 val chooser = Intent.createChooser(target, null).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -117,13 +148,42 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
 
             override fun onDelete(id: Int) {
                 service.lifecycleScope.launch {
-                    ClipboardManager.delete(id)
+                    AppClipboardManager.delete(id)
                     showUndoSnackbar(id)
                 }
             }
 
             override fun onPaste(entry: ClipboardEntry) {
-                service.commitText(entry.text)
+                if (entry.isImage) {
+                    // 图片类型：使用 Rich Content API 发送图片
+                    try {
+                        val imageFile = File(entry.imagePath)
+                        if (imageFile.exists()) {
+                            val imageUri = FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.fileprovider",
+                                imageFile
+                            )
+                            // 尝试使用 commitContent 发送图片
+                            if (!service.commitImage(imageUri, entry.type)) {
+                                // 如果失败（例如输入框不支持），则复制到系统剪贴板
+                                val clip = ClipData.newUri(
+                                    context.contentResolver,
+                                    "Clipboard Image",
+                                    imageUri
+                                )
+                                (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                                    .setPrimaryClip(clip)
+                            }
+                        } else {
+                            Timber.w("Image file does not exist: ${entry.imagePath}")
+                        }
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to paste image")
+                    }
+                } else {
+                    service.commitText(entry.text)
+                }
                 if (clipboardReturnAfterPaste) windowManager.attachWindow(KeyboardWindow)
             }
         }
@@ -154,7 +214,7 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
                 override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
                     val entry = adapter.getEntryAt(viewHolder.bindingAdapterPosition) ?: return
                     service.lifecycleScope.launch {
-                        ClipboardManager.delete(entry.id)
+                        AppClipboardManager.delete(entry.id)
                         showUndoSnackbar(entry.id)
                     }
                 }
@@ -164,7 +224,7 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
             }
             deleteAllButton.setOnClickListener {
                 service.lifecycleScope.launch {
-                    promptDeleteAll(ClipboardManager.haveUnpinned())
+                    promptDeleteAll(AppClipboardManager.haveUnpinned())
                 }
             }
         }
@@ -187,7 +247,7 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
             menu.add(android.R.string.cancel)
             menu.item(android.R.string.ok) {
                 service.lifecycleScope.launch {
-                    val ids = ClipboardManager.deleteAll(skipPinned)
+                    val ids = AppClipboardManager.deleteAll(skipPinned)
                     showUndoSnackbar(*ids)
                 }
             }
@@ -210,7 +270,7 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
             .setActionTextColor(theme.genericActiveBackgroundColor)
             .setAction(R.string.undo) {
                 service.lifecycleScope.launch {
-                    ClipboardManager.undoDelete(*pendingDeleteIds.toIntArray())
+                    AppClipboardManager.undoDelete(*pendingDeleteIds.toIntArray())
                     pendingDeleteIds.clear()
                 }
             }
@@ -224,7 +284,7 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
                         BaseCallback.DISMISS_EVENT_MANUAL,
                         BaseCallback.DISMISS_EVENT_TIMEOUT -> {
                             service.lifecycleScope.launch {
-                                ClipboardManager.realDelete()
+                                AppClipboardManager.realDelete()
                                 pendingDeleteIds.clear()
                             }
                         }
@@ -251,7 +311,7 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
     }
 
     override fun onAttached() {
-        val isEmpty = ClipboardManager.itemCount == 0
+        val isEmpty = AppClipboardManager.itemCount == 0
         val isListening = clipboardEnabledPref.getValue()
         val initialState = when {
             !isListening -> EnableListening

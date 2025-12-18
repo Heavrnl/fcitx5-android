@@ -25,6 +25,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import android.graphics.BitmapFactory
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.CapabilityFlag
 import org.fcitx.fcitx5.android.core.CapabilityFlags
@@ -113,9 +116,48 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
         ClipboardManager.OnClipboardUpdateListener {
             if (!clipboardSuggestion.getValue()) return@OnClipboardUpdateListener
             service.lifecycleScope.launch {
-                if (it.text.isEmpty()) {
+                if (it.isImage) {
+                    // 图片类型：显示缩略图和简短文本
+                    idleUi.clipboardUi.icon.visibility = View.GONE
+                    idleUi.clipboardUi.image.visibility = View.VISIBLE
+                    idleUi.clipboardUi.text.text = context.getString(R.string.clipboard_image_simple)
+
+                    // 加载缩略图
+                    val imagePath = it.imagePath
+                    val bitmap = withContext(Dispatchers.IO) {
+                        try {
+                            val options = BitmapFactory.Options().apply {
+                                inJustDecodeBounds = true
+                            }
+                            BitmapFactory.decodeFile(imagePath, options)
+                            var sampleSize = 1
+                            val targetSize = 64 // 缩略图不需要太大
+                            if (options.outHeight > targetSize || options.outWidth > targetSize) {
+                                val halfHeight = options.outHeight / 2
+                                val halfWidth = options.outWidth / 2
+                                while ((halfHeight / sampleSize) >= targetSize && (halfWidth / sampleSize) >= targetSize) {
+                                    sampleSize *= 2
+                                }
+                            }
+                            val decodeOptions = BitmapFactory.Options().apply {
+                                inSampleSize = sampleSize
+                            }
+                            BitmapFactory.decodeFile(imagePath, decodeOptions)
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                    idleUi.clipboardUi.image.setImageBitmap(bitmap)
+
+                    isClipboardFresh = true
+                    launchClipboardTimeoutJob()
+                } else if (it.text.isEmpty()) {
                     isClipboardFresh = false
                 } else {
+                    // 文本类型：恢复图标显示
+                    idleUi.clipboardUi.icon.visibility = View.VISIBLE
+                    idleUi.clipboardUi.image.visibility = View.GONE
+
                     idleUi.clipboardUi.text.text = if (it.sensitive && clipboardMaskSensitive) {
                         ClipboardEntry.BULLET.repeat(min(42, it.text.length))
                     } else {
@@ -247,8 +289,35 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
             }
             clipboardUi.suggestionView.apply {
                 setOnClickListener {
-                    ClipboardManager.lastEntry?.let {
-                        service.commitText(it.text)
+                    ClipboardManager.lastEntry?.let { entry ->
+                        if (entry.isImage) {
+                            // 图片类型：使用 Rich Content API 发送图片
+                            try {
+                                val imageFile = java.io.File(entry.imagePath)
+                                if (imageFile.exists()) {
+                                    val imageUri = androidx.core.content.FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.fileprovider",
+                                        imageFile
+                                    )
+                                    if (!service.commitImage(imageUri, entry.type)) {
+                                        // 如果输入框不支持图片，复制到系统剪贴板
+                                        val clip = android.content.ClipData.newUri(
+                                            context.contentResolver,
+                                            "Clipboard Image",
+                                            imageUri
+                                        )
+                                        (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                                            .setPrimaryClip(clip)
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                timber.log.Timber.e(e, "Failed to paste image")
+                            }
+                        } else {
+                            // 文本类型
+                            service.commitText(entry.text)
+                        }
                     }
                     clipboardTimeoutJob?.cancel()
                     clipboardTimeoutJob = null

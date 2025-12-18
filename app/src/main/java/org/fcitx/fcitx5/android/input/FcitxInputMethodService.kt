@@ -216,6 +216,13 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         super.onCreate()
         decorView = window.window!!.decorView
         contentView = decorView.findViewById(android.R.id.content)
+        
+        // Register callback for verification code auto-fill
+        org.fcitx.fcitx5.android.data.verification.VerificationCodeManager.onCodeExtracted = { code ->
+            if (currentInputConnection != null) {
+                commitText(code)
+            }
+        }
     }
 
     private fun handleFcitxEvent(event: FcitxEvent<*>) {
@@ -434,6 +441,62 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 setSelection(target, target)
             }
         }
+    }
+
+    /**
+     * 发送图片到当前输入框
+     * 使用 Android Rich Content API (InputConnection.commitContent)
+     * 
+     * @param imageUri 图片的 Content URI（必须通过 FileProvider 获取）
+     * @param mimeType 图片的 MIME 类型，如 "image/png"
+     * @return 是否成功发送
+     */
+    fun commitImage(imageUri: android.net.Uri, mimeType: String): Boolean {
+        val ic = currentInputConnection ?: return false
+        val editorInfo = currentInputEditorInfo ?: return false
+        
+        // 检查输入框是否支持该 MIME 类型
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
+            val supportedMimeTypes = androidx.core.view.inputmethod.EditorInfoCompat.getContentMimeTypes(editorInfo)
+            
+            // 检查是否支持图片
+            val supported = supportedMimeTypes.any { supported ->
+                android.content.ClipDescription.compareMimeTypes(mimeType, supported)
+            }
+            
+            if (!supported) {
+                Timber.w("Editor does not support image input, supported types: ${supportedMimeTypes.joinToString()}")
+                return false
+            }
+            
+            // 创建 InputContentInfo
+            val inputContentInfo = androidx.core.view.inputmethod.InputContentInfoCompat(
+                imageUri,
+                android.content.ClipDescription("Image", arrayOf(mimeType)),
+                null // 可选的 link Uri
+            )
+            
+            // 发送图片
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
+                android.view.inputmethod.InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION
+            } else {
+                0
+            }
+            
+            val result = androidx.core.view.inputmethod.InputConnectionCompat.commitContent(
+                ic,
+                editorInfo,
+                inputContentInfo,
+                flags,
+                null
+            )
+            
+            Timber.d("commitImage result: $result, uri: $imageUri")
+            return result
+        }
+        
+        Timber.w("commitImage requires API 25+")
+        return false
     }
 
     private fun sendDownKeyEvent(eventTime: Long, keyEventCode: Int, metaState: Int = 0) {

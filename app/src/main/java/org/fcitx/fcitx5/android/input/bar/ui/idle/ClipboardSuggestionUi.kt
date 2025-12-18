@@ -5,24 +5,27 @@
 package org.fcitx.fcitx5.android.input.bar.ui.idle
 
 import android.content.Context
+import android.content.res.ColorStateList
+import android.graphics.drawable.RippleDrawable
+import android.graphics.drawable.StateListDrawable
 import android.text.TextUtils
+import android.view.Gravity
+import android.widget.FrameLayout
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.theme.Theme
+import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView
+import org.fcitx.fcitx5.android.input.keyboard.radiusDrawable
 import org.fcitx.fcitx5.android.utils.rippleDrawable
 import splitties.dimensions.dp
 import splitties.resources.drawable
-import splitties.views.dsl.constraintlayout.after
-import splitties.views.dsl.constraintlayout.before
 import splitties.views.dsl.constraintlayout.centerInParent
-import splitties.views.dsl.constraintlayout.centerVertically
 import splitties.views.dsl.constraintlayout.constraintLayout
-import splitties.views.dsl.constraintlayout.endOfParent
 import splitties.views.dsl.constraintlayout.lParams
 import splitties.views.dsl.constraintlayout.matchConstraints
-import splitties.views.dsl.constraintlayout.startOfParent
 import splitties.views.dsl.core.Ui
 import splitties.views.dsl.core.add
+import splitties.views.dsl.core.horizontalLayout
 import splitties.views.dsl.core.imageView
 import splitties.views.dsl.core.lParams
 import splitties.views.dsl.core.matchParent
@@ -33,10 +36,18 @@ import splitties.views.imageDrawable
 
 class ClipboardSuggestionUi(override val ctx: Context, private val theme: Theme) : Ui {
 
-    private val icon = imageView {
+    private val keyBorder by ThemeManager.prefs.keyBorder
+    private val keyRipple by ThemeManager.prefs.keyRippleEffect
+
+    val icon = imageView {
         imageDrawable = drawable(R.drawable.ic_clipboard)!!.apply {
             setTint(theme.altKeyTextColor)
         }
+    }
+
+    val image = imageView {
+        visibility = android.view.View.GONE
+        scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
     }
 
     val text = textView {
@@ -46,23 +57,57 @@ class ClipboardSuggestionUi(override val ctx: Context, private val theme: Theme)
         setTextColor(theme.altKeyTextColor)
     }
 
-    private val layout = constraintLayout {
+    // 使用 horizontalLayout 让 icon 和 text 作为一个整体水平居中
+    private val layout = horizontalLayout {
+        gravity = Gravity.CENTER_VERTICAL
         val spacing = dp(4)
+        // 添加水平内边距以确保内容不贴边
+        val horizontalPadding = dp(8)
+        setPadding(horizontalPadding, 0, horizontalPadding, 0)
+        
         add(icon, lParams(dp(20), dp(20)) {
-            startOfParent(spacing)
-            before(text)
-            centerVertically()
+            marginEnd = spacing
         })
-        add(text, lParams(wrapContent, wrapContent) {
-            after(icon, spacing)
-            endOfParent(spacing)
-            centerVertically()
+        add(image, lParams(dp(20), dp(20)) {
+            marginEnd = spacing
         })
+        add(text, lParams(wrapContent, wrapContent))
     }
 
     val suggestionView = CustomGestureView(ctx).apply {
-        add(layout, lParams(wrapContent, matchParent))
-        background = rippleDrawable(theme.keyPressHighlightColor)
+        // 使用 FrameLayout.LayoutParams 设置 gravity 让 layout 在 suggestionView 中居中
+        add(layout, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            Gravity.CENTER
+        ))
+        
+        // Apply key border style if enabled
+        if (keyBorder) {
+            // 使用和键盘按键一致的背景颜色 keyBackgroundColor
+            // 固定胶囊形状，使用大圆角 (类似 Gboard)
+            val capsuleRadius = ctx.dp(50).toFloat() // 大圆角实现胶囊效果
+            
+            // 简单的圆角背景，不带阴影
+            background = radiusDrawable(capsuleRadius, theme.keyBackgroundColor)
+            
+            // Foreground: press highlight or ripple
+            foreground = if (keyRipple) {
+                RippleDrawable(
+                    ColorStateList.valueOf(theme.keyPressHighlightColor), null,
+                    radiusDrawable(capsuleRadius, android.graphics.Color.WHITE)
+                )
+            } else {
+                StateListDrawable().apply {
+                    addState(
+                        intArrayOf(android.R.attr.state_pressed),
+                        radiusDrawable(capsuleRadius, theme.keyPressHighlightColor)
+                    )
+                }
+            }
+        } else {
+            background = rippleDrawable(theme.keyPressHighlightColor)
+        }
     }
 
     override val root = constraintLayout {

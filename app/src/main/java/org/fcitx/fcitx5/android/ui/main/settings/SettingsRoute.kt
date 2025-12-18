@@ -30,6 +30,8 @@ import org.fcitx.fcitx5.android.ui.main.settings.behavior.CandidatesSettingsFrag
 import org.fcitx.fcitx5.android.ui.main.settings.behavior.ClipboardSettingsFragment
 import org.fcitx.fcitx5.android.ui.main.settings.behavior.KeyboardSettingsFragment
 import org.fcitx.fcitx5.android.ui.main.settings.behavior.SymbolSettingsFragment
+import org.fcitx.fcitx5.android.ui.main.settings.behavior.SyncClipboardSettingsFragment
+import org.fcitx.fcitx5.android.ui.main.settings.behavior.VerificationCodeSettingsFragment
 import org.fcitx.fcitx5.android.ui.main.settings.global.GlobalConfigFragment
 import org.fcitx.fcitx5.android.ui.main.settings.im.InputMethodConfigFragment
 import org.fcitx.fcitx5.android.ui.main.settings.im.InputMethodListFragment
@@ -85,6 +87,12 @@ sealed class SettingsRoute : Parcelable {
 
     @Serializable
     data object Advanced : SettingsRoute()
+
+    @Serializable
+    data object SyncClipboard : SettingsRoute()
+
+    @Serializable
+    data object VerificationCode : SettingsRoute()
 
     @Serializable
     data object Developer : SettingsRoute()
@@ -224,6 +232,12 @@ sealed class SettingsRoute : Parcelable {
             }
             fragment<AdvancedSettingsFragment, Advanced> {
                 label = ctx.getString(R.string.advanced)
+            }
+            fragment<SyncClipboardSettingsFragment, SyncClipboard> {
+                label = ctx.getString(R.string.sync_clipboard)
+            }
+            fragment<VerificationCodeSettingsFragment, VerificationCode> {
+                label = ctx.getString(R.string.verification_code)
             }
             fragment<DeveloperFragment, Developer> {
                 label = ctx.getString(R.string.developer)

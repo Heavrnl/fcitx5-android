@@ -157,4 +157,35 @@ abstract class ManagedPreferenceUi<T : Preference>(
             summaryProvider = TwinSeekBarPreference.SimpleSummaryProvider
         }
     }
+
+    class EditTextString(
+        @StringRes
+        val title: Int,
+        key: String,
+        val defaultValue: String,
+        val isPassword: Boolean = false,
+        enableUiOn: (() -> Boolean)? = null
+    ) : ManagedPreferenceUi<EditTextPreference>(key, enableUiOn) {
+        override fun createUi(context: Context) = EditTextPreference(context).apply {
+            key = this@EditTextString.key
+            isIconSpaceReserved = false
+            isSingleLineTitle = false
+            setDefaultValue(this@EditTextString.defaultValue)
+            setTitle(this@EditTextString.title)
+            setDialogTitle(this@EditTextString.title)
+            summaryProvider = if (this@EditTextString.isPassword) {
+                Preference.SummaryProvider<EditTextPreference> { pref ->
+                    if (pref.text.isNullOrEmpty()) "" else "••••••••"
+                }
+            } else {
+                EditTextPreference.SimpleSummaryProvider.getInstance()
+            }
+            if (this@EditTextString.isPassword) {
+                setOnBindEditTextListener { editText ->
+                    editText.inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                            android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                }
+            }
+        }
+    }
 }

@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2024 Fcitx5 for Android Contributors
  */
 package org.fcitx.fcitx5.android.data.clipboard
 
@@ -26,11 +26,17 @@ import org.fcitx.fcitx5.android.utils.WeakHashSet
 import org.fcitx.fcitx5.android.utils.appContext
 import org.fcitx.fcitx5.android.utils.clipboardManager
 import timber.log.Timber
+import java.io.File
 
 object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
     CoroutineScope by CoroutineScope(SupervisorJob() + Dispatchers.Default) {
     private lateinit var clbDb: ClipboardDatabase
     private lateinit var clbDao: ClipboardDao
+    private lateinit var context: Context
+
+    // 图片存储目录
+    val imageDir: File
+        get() = File(context.filesDir, "clipboard_images").also { it.mkdirs() }
 
     fun interface OnClipboardUpdateListener {
         fun onUpdate(entry: ClipboardEntry)
@@ -85,6 +91,7 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
     }
 
     fun init(context: Context) {
+        this.context = context
         clbDb = Room
             .databaseBuilder(context, ClipboardDatabase::class.java, "clbdb")
             // allow wipe the database instead of crashing when downgrade
@@ -116,6 +123,11 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
     }
 
     suspend fun delete(id: Int) {
+        // 删除关联图片
+        val entry = clbDao.get(id)
+        if (entry?.imagePath?.isNotEmpty() == true) {
+            File(entry.imagePath).delete()
+        }
         clbDao.markAsDeleted(id)
         updateItemCount()
     }
@@ -125,6 +137,13 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
             clbDao.findUnpinnedIds()
         } else {
             clbDao.findAllIds()
+        }
+        // 删除关联图片
+        ids.forEach { id ->
+            val entry = clbDao.get(id)
+            if (entry?.imagePath?.isNotEmpty() == true) {
+                File(entry.imagePath).delete()
+            }
         }
         clbDao.markAsDeleted(*ids)
         updateItemCount()
@@ -143,7 +162,30 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
     suspend fun nukeTable() {
         withContext(coroutineContext) {
             clbDb.clearAllTables()
+            // 清除所有图片
+            imageDir.listFiles()?.forEach { it.delete() }
             updateItemCount()
+        }
+    }
+
+    /**
+     * 插入图片条目（用于 SyncClipboard）
+     */
+    suspend fun insertImageEntry(entry: ClipboardEntry): ClipboardEntry? {
+        return mutex.withLock {
+            try {
+                val insertedEntry = clbDb.withTransaction {
+                    val rowId = clbDao.insert(entry)
+                    removeOutdated()
+                    clbDao.get(rowId) ?: entry
+                }
+                updateLastEntry(insertedEntry)
+                updateItemCount()
+                insertedEntry
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to insert image entry")
+                null
+            }
         }
     }
 
@@ -169,7 +211,28 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
         }
         launch {
             mutex.withLock {
-                val entry = ClipboardEntry.fromClipData(clip, transformer) ?: return@withLock
+                // 尝试包含图片的处理
+                val entry = ClipboardEntry.fromClipData(clip, context, imageDir, transformer)
+                    ?: ClipboardEntry.fromClipData(clip, transformer)
+                    ?: return@withLock
+                
+                // 图片类型直接插入
+                if (entry.isImage) {
+                    try {
+                        val insertedEntry = clbDb.withTransaction {
+                            val rowId = clbDao.insert(entry)
+                            removeOutdated()
+                            clbDao.get(rowId) ?: entry
+                        }
+                        updateLastEntry(insertedEntry)
+                        updateItemCount()
+                    } catch (exception: Exception) {
+                        Timber.w("Failed to insert image entry: $exception")
+                    }
+                    return@withLock
+                }
+                
+                // 文本类型处理
                 if (entry.text.isBlank()) return@withLock
                 try {
                     clbDao.find(entry.text, entry.sensitive)?.let {
@@ -201,6 +264,13 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
             val last = unpinned
                 .sortedBy { it.id }
                 .getOrNull(unpinned.size - limit)
+            // 删除过期条目的图片
+            val toDelete = unpinned.filter { it.timestamp < (last?.timestamp ?: System.currentTimeMillis()) }
+            toDelete.forEach { entry ->
+                if (entry.imagePath.isNotEmpty()) {
+                    File(entry.imagePath).delete()
+                }
+            }
             // delete all unpinned before that, or delete all when limit <= 0
             clbDao.markUnpinnedAsDeletedEarlierThan(last?.timestamp ?: System.currentTimeMillis())
         }

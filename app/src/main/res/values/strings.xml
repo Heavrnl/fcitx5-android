@@ -316,4 +316,33 @@
     <string name="emoji_skin_tone_type_6">🏿 Type-6</string>
     <string name="hide_unsupported_emojis">Hide unsupported Emojis</string>
     <string name="key_border_stroke">Enable stroke for key border</string>
+    <!-- SyncClipboard -->
+    <string name="sync_clipboard">Clipboard Sync</string>
+    <string name="sync_clipboard_enabled">Enable clipboard sync</string>
+    <string name="sync_clipboard_url">Server URL</string>
+    <string name="sync_clipboard_username">Username</string>
+    <string name="sync_clipboard_password">Password</string>
+    <string name="sync_clipboard_interval">Sync interval</string>
+    <!-- Image clipboard -->
+    <string name="clipboard_image">[Image] Tap to paste</string>
+    <string name="clipboard_image_simple">Image</string>
+    <!-- Verification Code Extraction -->
+    <string name="verification_code">Verification Code Extraction</string>
+    <string name="verification_code_enabled">Enable verification code extraction</string>
+    <string name="verification_code_auto_fill">Auto-fill extracted code</string>
+    <string name="verification_code_extraction_mode">Extraction mode</string>
+    <string name="verification_code_mode_local">Local (Regex)</string>
+    <string name="verification_code_mode_ai">AI (OpenAI API)</string>
+    <string name="verification_code_openai_url">API URL</string>
+    <string name="verification_code_openai_key">API Key</string>
+    <string name="verification_code_openai_model">Model</string>
+    <string name="verification_code_openai_prompt">Prompt template</string>
+    <string name="verification_code_keywords">Trigger keywords</string>
+    <string name="verification_code_keywords_manage">Manage keywords</string>
+    <string name="verification_code_notification_access">Notification access required</string>
+    <string name="verification_code_notification_access_desc">This feature requires notification access to monitor SMS messages. Please enable it in system settings.</string>
+    <string name="verification_code_grant_access">Grant access</string>
+    <string name="verification_code_extracted">Verification code extracted: %1$s</string>
+    <string name="verification_code_copied">Code copied to clipboard</string>
 </resources>
+

@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2024 Fcitx5 for Android Contributors
  */
 package org.fcitx.fcitx5.android.input.clipboard
 
@@ -91,7 +91,13 @@ abstract class ClipboardAdapter(
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val entry = getItem(position) ?: return
         with(holder.entryUi) {
-            setEntry(excerptText(entry.text, entry.sensitive && maskSensitive), entry.pinned)
+            // 根据类型显示文本或图片
+            if (entry.isImage) {
+                setImageEntry(entry.imagePath, entry.pinned)
+            } else {
+                setEntry(excerptText(entry.text, entry.sensitive && maskSensitive), entry.pinned)
+            }
+            
             root.setOnClickListener {
                 onPaste(entry)
             }
@@ -108,8 +114,11 @@ abstract class ClipboardAdapter(
                         onPin(entry.id)
                     }
                 }
-                menu.item(R.string.edit, R.drawable.ic_baseline_edit_24, iconTint) {
-                    onEdit(entry.id)
+                // 图片不支持编辑
+                if (!entry.isImage) {
+                    menu.item(R.string.edit, R.drawable.ic_baseline_edit_24, iconTint) {
+                        onEdit(entry.id)
+                    }
                 }
                 menu.item(R.string.share, R.drawable.ic_baseline_share_24, iconTint) {
                     onShare(entry)
@@ -129,6 +138,12 @@ abstract class ClipboardAdapter(
                 true
             }
         }
+    }
+
+    override fun onViewRecycled(holder: ViewHolder) {
+        super.onViewRecycled(holder)
+        // 回收图片资源
+        holder.entryUi.recycle()
     }
 
     fun getEntryAt(position: Int) = getItem(position)

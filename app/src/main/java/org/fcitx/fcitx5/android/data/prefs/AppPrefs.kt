@@ -21,6 +21,7 @@ import org.fcitx.fcitx5.android.input.keyboard.SpaceLongPressBehavior
 import org.fcitx.fcitx5.android.input.keyboard.SwipeSymbolDirection
 import org.fcitx.fcitx5.android.input.picker.PickerWindow
 import org.fcitx.fcitx5.android.input.popup.EmojiModifier
+import org.fcitx.fcitx5.android.data.verification.VerificationCodeExtractionMode
 import org.fcitx.fcitx5.android.utils.DeviceUtil
 import org.fcitx.fcitx5.android.utils.appContext
 import org.fcitx.fcitx5.android.utils.vibrator
@@ -345,6 +346,64 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         ) { clipboardListening.getValue() }
     }
 
+    // SyncClipboard 剪切板同步设置
+    inner class SyncClipboard : ManagedPreferenceCategory(R.string.sync_clipboard, sharedPreferences) {
+        val enabled = switch(
+            R.string.sync_clipboard_enabled, "sync_clipboard_enabled", false
+        )
+        val serverUrl = string(
+            R.string.sync_clipboard_url, "sync_clipboard_url", ""
+        ) { enabled.getValue() }
+        val username = string(
+            R.string.sync_clipboard_username, "sync_clipboard_username", ""
+        ) { enabled.getValue() }
+        val password = password(
+            R.string.sync_clipboard_password, "sync_clipboard_password", ""
+        ) { enabled.getValue() }
+        val interval = int(
+            R.string.sync_clipboard_interval,
+            "sync_clipboard_interval",
+            1,
+            1,
+            60,
+            "s"
+        ) { enabled.getValue() }
+    }
+
+    // 验证码提取设置
+    inner class VerificationCode : ManagedPreferenceCategory(R.string.verification_code, sharedPreferences) {
+        val enabled = switch(
+            R.string.verification_code_enabled, "verification_code_enabled", false
+        )
+        val autoFill = switch(
+            R.string.verification_code_auto_fill, "verification_code_auto_fill", true
+        ) { enabled.getValue() }
+        val extractionMode = enumList(
+            R.string.verification_code_extraction_mode,
+            "verification_code_extraction_mode",
+            VerificationCodeExtractionMode.Local
+        ) { enabled.getValue() }
+        val openaiApiUrl = string(
+            R.string.verification_code_openai_url, "verification_code_openai_url", ""
+        ) { enabled.getValue() && extractionMode.getValue() == VerificationCodeExtractionMode.AI }
+        val openaiApiKey = password(
+            R.string.verification_code_openai_key, "verification_code_openai_key", ""
+        ) { enabled.getValue() && extractionMode.getValue() == VerificationCodeExtractionMode.AI }
+        val openaiModel = string(
+            R.string.verification_code_openai_model, "verification_code_openai_model", "gpt-4o-mini"
+        ) { enabled.getValue() && extractionMode.getValue() == VerificationCodeExtractionMode.AI }
+        val openaiPrompt = string(
+            R.string.verification_code_openai_prompt, 
+            "verification_code_openai_prompt", 
+            "请从以下短信内容中提取验证码，只返回验证码数字或字母组合，如果没有找到验证码则返回None：\n{input_text}"
+        ) { enabled.getValue() && extractionMode.getValue() == VerificationCodeExtractionMode.AI }
+        val keywords = string(
+            R.string.verification_code_keywords,
+            "verification_code_keywords",
+            "验证码,校验码,检验码,确认码,激活码,动态码,安全码,验证代码,校验代码,检验代码,激活代码,确认代码,动态代码,安全代码,登入码,认证码,识别码,短信口令,动态密码,交易码,上网密码,随机码,动态口令,驗證碼,校驗碼,檢驗碼,確認碼,激活碼,動態碼,驗證代碼,校驗代碼,檢驗代碼,確認代碼,激活代碼,動態代碼,登入碼,認證碼,識別碼,code,otp,one-time password,verification,auth,authentication,pin,security,access,token,短信验证,短信验證,短信校验,短信校驗,手机验证,手機驗證,手机校验,手機校驗,验证短信,驗證短信,验证信息,驗證信息,一次性密码,一次性密碼,临时密码,臨時密碼,授权码,授權碼,授权密码,授權密碼,二步验证,二步驗證,两步验证,兩步驗證,mfa,2fa,two-factor,multi-factor,passcode,pass code,secure code,security code,tac,tan,transaction authentication number,验证邮件,驗證郵件,确认邮件,確認郵件,一次性验证码,一次性驗證碼,单次有效,單次有效,临时口令,臨時口令,临时验证码,臨時驗證碼"
+        ) { enabled.getValue() }
+    }
+
     inner class Symbols : ManagedPreferenceCategory(R.string.emoji_and_symbols, sharedPreferences) {
         val hideUnsupportedEmojis = switch(
             R.string.hide_unsupported_emojis,
@@ -377,6 +436,8 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
     val keyboard = Keyboard().register()
     val candidates = Candidates().register()
     val clipboard = Clipboard().register()
+    val syncClipboard = SyncClipboard().register()
+    val verificationCode = VerificationCode().register()
     val symbols = Symbols().register()
     val advanced = Advanced().register()
 

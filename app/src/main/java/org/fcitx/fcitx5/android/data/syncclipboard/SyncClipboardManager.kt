@@ -63,6 +63,9 @@ object SyncClipboardManager : CoroutineScope by CoroutineScope(SupervisorJob() +
         if (prefs.enabled.getValue()) {
             startSync()
         }
+        
+        // Initialize screenshot detector
+        ScreenshotDetector.init()
     }
 
     private fun createClient(): SyncClipboardClient? {

@@ -323,6 +323,10 @@
     <string name="sync_clipboard_username">Username</string>
     <string name="sync_clipboard_password">Password</string>
     <string name="sync_clipboard_interval">Sync interval</string>
+    <string name="sync_clipboard_screenshot_detection">Screenshot detection</string>
+    <string name="sync_clipboard_screenshot_auto_upload">Auto-upload screenshots</string>
+    <string name="sync_clipboard_media_permission_title">Media Permission Required</string>
+    <string name="sync_clipboard_media_permission_desc">Screenshot detection requires access to photos and media. Please grant the permission to enable this feature.</string>
     <!-- Image clipboard -->
     <string name="clipboard_image">[Image] Tap to paste</string>
     <string name="clipboard_image_simple">Image</string>

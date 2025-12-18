@@ -368,6 +368,16 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             60,
             "s"
         ) { enabled.getValue() }
+        val screenshotDetection = switch(
+            R.string.sync_clipboard_screenshot_detection,
+            "sync_clipboard_screenshot_detection",
+            false
+        )
+        val screenshotAutoUpload = switch(
+            R.string.sync_clipboard_screenshot_auto_upload,
+            "sync_clipboard_screenshot_auto_upload",
+            false
+        ) { screenshotDetection.getValue() && enabled.getValue() }
     }
 
     // 验证码提取设置

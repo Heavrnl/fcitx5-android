@@ -17,6 +17,11 @@
     <!-- SyncClipboard needs network access -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Screenshot detection requires media access -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
     <!-- remove intent queries merged from library manifest (namely Android-Image-Cropper) -->
     <queries tools:node="removeAll" />
 

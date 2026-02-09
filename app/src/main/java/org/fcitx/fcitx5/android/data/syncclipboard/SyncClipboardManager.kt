@@ -6,13 +6,10 @@ package org.fcitx.fcitx5.android.data.syncclipboard
 
 import android.content.ClipData
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import androidx.annotation.Keep
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.data.clipboard.ClipboardManager
 import org.fcitx.fcitx5.android.data.clipboard.db.ClipboardEntry
@@ -27,16 +24,12 @@ import java.security.MessageDigest
 
 /**
  * SyncClipboard 同步管理器
- * 自动同步本地剪切板与远程服务器
+ * 使用 SignalR WebSocket 实时同步剪切板
  */
 object SyncClipboardManager : CoroutineScope by CoroutineScope(SupervisorJob() + Dispatchers.Default) {
 
     private val prefs = AppPrefs.getInstance().syncClipboard
     private val clipboardManager = appContext.clipboardManager
-
-    private var syncJob: Job? = null
-    private var lastSyncedHash: String = ""
-    private var lastLocalHash: String = ""
     
     private var client: SyncClipboardClient? = null
 
@@ -49,26 +42,24 @@ object SyncClipboardManager : CoroutineScope by CoroutineScope(SupervisorJob() +
         }
     }
 
-    @Keep
-    private val intervalListener = ManagedPreference.OnChangeListener<Int> { _, _ ->
-        if (prefs.enabled.getValue()) {
-            restartSync()
-        }
-    }
-
     fun init() {
+        Timber.i("SyncClipboardManager: init called")
         prefs.enabled.registerOnChangeListener(enabledListener)
-        prefs.interval.registerOnChangeListener(intervalListener)
+        
+        ClipboardManager.addOnUpdateListener(clipboardListener)
         
         if (prefs.enabled.getValue()) {
+            Timber.i("SyncClipboardManager: feature enabled, starting sync")
             startSync()
+        } else {
+            Timber.i("SyncClipboardManager: feature disabled")
         }
         
         // Initialize screenshot detector
         ScreenshotDetector.init()
     }
 
-    private fun createClient(): SyncClipboardClient? {
+    private fun createSignalRClient(): SyncClipboardSignalR? {
         val url = prefs.serverUrl.getValue()
         val username = prefs.username.getValue()
         val password = prefs.password.getValue()
@@ -78,95 +69,150 @@ object SyncClipboardManager : CoroutineScope by CoroutineScope(SupervisorJob() +
             return null
         }
         
-        return SyncClipboardClient(url.trimEnd('/'), username, password)
+        return SyncClipboardSignalR(url.trimEnd('/'), username, password)
     }
 
+    private val pendingEchoes = java.util.Collections.synchronizedSet(HashSet<String>())
+
+    private val clipboardListener = ClipboardManager.OnClipboardUpdateListener { entry ->
+        // 仅处理文本更新 (图片目前似乎是手动或 separate logic handles?)
+        // 实际上 SyncClipboardManager 原有逻辑也没有自动上传图片
+        // 只有手动上传 (uploadLatestImage)
+        if (prefs.enabled.getValue() && !entry.isImage) {
+             val text = entry.text
+             if (text.isNotBlank()) {
+                 // 避免循环：如果我们刚刚收到这个文本，就不回传了
+                 // 但 handleProfileChanged 已经处理了 setLocalClipboard
+                 // ClipboardManager 会再次回调 listener
+                 // 我们需要区分来源
+                 
+                 // 如果文本在 pendingEchoes 中，说明是我们发的（且收到了回显），或者是刚刚收到的
+                 // 但这里是 *本地* 更新触发的
+                 // 如果 handleProfileChanged 调用了 setLocalClipboard -> trigger listener -> here
+                 // 此时 pendingEchoes 应该包含该文本 (如果是 echo)
+                 // 或者是我们刚收到的
+                 
+                 // 简化逻辑：如果内容与我们最后一次收到的内容相同，忽略
+                 if (text == lastReceivedText) {
+                     return@OnClipboardUpdateListener
+                 }
+                 
+                 launch {
+                     uploadText(text)
+                 }
+             }
+        }
+    }
+
+
+    private var signalRClient: SyncClipboardSignalR? = null
+
     private fun startSync() {
-        client = createClient() ?: return
+        Timber.i("SyncClipboardManager: attempting to start sync")
+        signalRClient?.disconnect()
+        signalRClient = createSignalRClient()
         
-        syncJob = launch {
-            while (true) {
-                try {
-                    syncFromServer()
-                    syncToServer()
-                } catch (e: Exception) {
-                    Timber.e(e, "SyncClipboard sync error")
-                }
-                
-                val intervalSeconds = prefs.interval.getValue()
-                delay(intervalSeconds * 1000L)
+        if (signalRClient == null) {
+            Timber.w("SyncClipboardManager: failed to create client (missing config?)")
+            return
+        }
+        
+        signalRClient?.onProfileChanged = { profile ->
+            launch {
+                handleProfileChanged(profile)
             }
         }
-        Timber.i("SyncClipboard: Started with interval ${prefs.interval.getValue()}s")
+        
+        signalRClient?.onConnected = {
+            Timber.i("SyncClipboard: WebSocket connected")
+        }
+        
+        signalRClient?.onDisconnected = { error ->
+            if (error != null) {
+                Timber.w(error, "SyncClipboard: WebSocket disconnected")
+            } else {
+                Timber.i("SyncClipboard: WebSocket disconnected (clean)")
+            }
+        }
+        
+        signalRClient?.connect()
+        Timber.i("SyncClipboard: Started with WebSocket")
     }
 
     private fun stopSync() {
-        syncJob?.cancel()
-        syncJob = null
+        Timber.i("SyncClipboardManager: stopSync called")
+        signalRClient?.disconnect()
+        signalRClient = null
         client = null
         Timber.i("SyncClipboard: Stopped")
     }
 
-    private fun restartSync() {
-        stopSync()
-        startSync()
-    }
-
     /**
-     * 从服务器拉取剪切板内容
+     * 处理服务器推送的 ProfileDto
      */
-    private suspend fun syncFromServer() {
-        val client = client ?: return
-        
-        val result = client.getClipboard()
-        result.onSuccess { data ->
-            val hash = calculateHash(data.clipboard + data.file)
-            if (hash == lastSyncedHash) {
-                return@onSuccess
-            }
-            
-            when (data.type) {
-                SyncClipboardData.TYPE_TEXT -> {
-                    if (data.clipboard.isNotBlank() && data.clipboard != getLocalClipboardText()) {
-                        setLocalClipboard(data.clipboard)
-                        lastSyncedHash = hash
-                        Timber.d("SyncClipboard: Downloaded text from server")
+    private suspend fun handleProfileChanged(profile: ProfileDto) {
+        Timber.d("SyncClipboardManager: handleProfileChanged: type=${profile.type}, text=${profile.text?.take(20)}..., dataName=${profile.dataName}")
+        try {
+            when (profile.type) {
+                ProfileDto.TYPE_TEXT -> {
+                    val text = profile.text
+                    // 检查是否是我们自己发送的回显
+                    if (pendingEchoes.remove(text)) {
+                        Timber.d("SyncClipboard: Ignoring echo")
+                        return
+                    }
+
+                    if (!text.isNullOrBlank() && text != getLocalClipboardText()) {
+                        lastReceivedText = text
+                        setLocalClipboard(text)
+                        Timber.d("SyncClipboard: Received text from server")
                     }
                 }
-                SyncClipboardData.TYPE_IMAGE -> {
-                    if (data.file.isNotBlank()) {
-                        val imageResult = client.downloadFile(data.file)
+                ProfileDto.TYPE_IMAGE, ProfileDto.TYPE_FILE -> {
+                    val dataName = profile.dataName
+                    if (!dataName.isNullOrBlank() && profile.hasData) {
+                        val httpClient = client ?: createClient() ?: return
+                        val imageResult = httpClient.downloadFile(dataName)
                         imageResult.onSuccess { bytes ->
-                            // 保存图片到剪贴板数据库并在 UI 中显示
-                            saveImageToClipboardHistory(bytes, data.file)
-                            lastSyncedHash = hash
-                            Timber.d("SyncClipboard: Downloaded image from server: ${data.file}")
+                            saveImageToClipboardHistory(bytes, dataName)
+                            Timber.d("SyncClipboard: Downloaded file from server: $dataName")
                         }
                     }
                 }
             }
+        } catch (e: Exception) {
+            Timber.e(e, "SyncClipboard: Error handling profile change")
         }
     }
 
-    /**
-     * 上传本地剪切板到服务器
-     */
-    private suspend fun syncToServer() {
-        val client = client ?: return
-        
-        val localText = getLocalClipboardText()
-        if (localText.isNullOrBlank()) return
-        
-        val hash = calculateHash(localText)
-        if (hash == lastLocalHash) return
-        
-        val data = SyncClipboardData.text(localText)
-        val result = client.putClipboard(data)
-        result.onSuccess {
-            lastLocalHash = hash
-            lastSyncedHash = hash
-            Timber.d("SyncClipboard: Uploaded text to server")
+    private var lastReceivedText: String? = null
+
+    private suspend fun uploadText(text: String) {
+        val client = client ?: createClient() ?: return
+        pendingEchoes.add(text)
+        val result = client.putClipboard(SyncClipboardData.text(text))
+        if (result.isSuccess) {
+            Timber.d("SyncClipboard: Uploaded text: ${text.take(20)}...")
+        } else {
+            Timber.w("SyncClipboard: Failed to upload text")
+            pendingEchoes.remove(text)
         }
+    }
+
+
+    /**
+     * 创建 HTTP 客户端（用于文件下载等）
+     */
+    private fun createClient(): SyncClipboardClient? {
+        val url = prefs.serverUrl.getValue()
+        val username = prefs.username.getValue()
+        val password = prefs.password.getValue()
+        
+        if (url.isBlank() || username.isBlank() || password.isBlank()) {
+            return null
+        }
+        
+        return SyncClipboardClient(url.trimEnd('/'), username, password)
     }
 
     /**
@@ -196,7 +242,7 @@ object SyncClipboardManager : CoroutineScope by CoroutineScope(SupervisorJob() +
             stream.toByteArray()
         }
         
-        val hash = calculateHash(bytes)
+        val hash = calculateServerHash(filename, bytes)
         val uploadResult = client.uploadFile(filename, bytes)
         
         return uploadResult.map {
@@ -219,7 +265,7 @@ object SyncClipboardManager : CoroutineScope by CoroutineScope(SupervisorJob() +
         val client = client ?: createClient() ?: return false
         
         val filename = "sync_${System.currentTimeMillis()}.png"
-        val hash = calculateHash(bytes)
+        val hash = calculateServerHash(filename, bytes)
         
         val uploadResult = client.uploadFile(filename, bytes)
         return uploadResult.map {
@@ -266,13 +312,22 @@ object SyncClipboardManager : CoroutineScope by CoroutineScope(SupervisorJob() +
         }
     }
 
-    private fun calculateHash(text: String): String {
-        return calculateHash(text.toByteArray())
-    }
-
-    private fun calculateHash(bytes: ByteArray): String {
-        val digest = MessageDigest.getInstance("MD5")
-        val hashBytes = digest.digest(bytes)
-        return hashBytes.joinToString("") { "%02x".format(it) }
+    private fun calculateServerHash(filename: String, bytes: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        
+        // 1. Calculate SHA256 of the content
+        val contentHashBytes = digest.digest(bytes)
+        // Microsoft's Convert.ToHexString returns Uppercase Hex
+        val contentHashHex = contentHashBytes.joinToString("") { "%02X".format(it) }
+        
+        // 2. Combine filename and uppercase content hash
+        // Server side: var combinedString = $"{fileName}|{contentHash.ToUpperInvariant()}";
+        val combined = "$filename|$contentHashHex"
+        
+        // 3. Calculate SHA256 of the combined string
+        val finalHashBytes = digest.digest(combined.toByteArray(Charsets.UTF_8))
+        
+        // 4. Return as Uppercase Hex
+        return finalHashBytes.joinToString("") { "%02X".format(it) }
     }
 }

@@ -360,14 +360,6 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         val password = password(
             R.string.sync_clipboard_password, "sync_clipboard_password", ""
         ) { enabled.getValue() }
-        val interval = int(
-            R.string.sync_clipboard_interval,
-            "sync_clipboard_interval",
-            1,
-            1,
-            60,
-            "s"
-        ) { enabled.getValue() }
         val screenshotDetection = switch(
             R.string.sync_clipboard_screenshot_detection,
             "sync_clipboard_screenshot_detection",

@@ -322,7 +322,7 @@
     <string name="sync_clipboard_url">服务器地址</string>
     <string name="sync_clipboard_username">用户名</string>
     <string name="sync_clipboard_password">密码</string>
-    <string name="sync_clipboard_interval">同步间隔</string>
+
     <string name="sync_clipboard_screenshot_detection">将最近的屏幕截图保存到剪贴板</string>
     <string name="sync_clipboard_screenshot_auto_upload">自动上传截图</string>
     <string name="sync_clipboard_media_permission_title">需要媒体访问权限</string>

@@ -13,12 +13,18 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class SyncClipboardData(
-    @SerialName("Type")
-    val type: String,  // "Text", "Image", "File", "Group"
-    @SerialName("Clipboard")
-    val clipboard: String,
-    @SerialName("File")
-    val file: String = ""
+    @SerialName("type")
+    val type: String = "Text",
+    @SerialName("text")
+    val text: String = "",
+    @SerialName("dataName")
+    val dataName: String = "",
+    @SerialName("hash")
+    val hash: String = "",
+    @SerialName("hasData")
+    val hasData: Boolean = false,
+    @SerialName("size")
+    val size: Long = 0
 ) {
     companion object {
         const val TYPE_TEXT = "Text"
@@ -28,14 +34,14 @@ data class SyncClipboardData(
 
         fun text(content: String) = SyncClipboardData(
             type = TYPE_TEXT,
-            clipboard = content,
-            file = ""
+            text = content
         )
 
         fun image(hash: String, filename: String) = SyncClipboardData(
             type = TYPE_IMAGE,
-            clipboard = hash,
-            file = filename
+            hash = hash,
+            dataName = filename,
+            hasData = true
         )
     }
 }

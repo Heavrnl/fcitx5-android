@@ -23,7 +23,10 @@ class SyncClipboardClient(
     private val username: String,
     private val password: String
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { 
+        ignoreUnknownKeys = true 
+        encodeDefaults = true
+    }
     
     private val authHeader: String by lazy {
         val credentials = "$username:$password"
@@ -50,6 +53,7 @@ class SyncClipboardClient(
                 val data = json.decodeFromString<SyncClipboardData>(responseBody)
                 Result.success(data)
             } else {
+                Timber.e("Failed to get clipboard: HTTP $responseCode")
                 Result.failure(IOException("HTTP error: $responseCode"))
             }
         } catch (e: Exception) {
@@ -80,6 +84,7 @@ class SyncClipboardClient(
             if (responseCode in 200..299) {
                 Result.success(Unit)
             } else {
+                Timber.e("Failed to put clipboard: HTTP $responseCode")
                 Result.failure(IOException("HTTP error: $responseCode"))
             }
         } catch (e: Exception) {
@@ -106,6 +111,7 @@ class SyncClipboardClient(
                 val bytes = connection.inputStream.readBytes()
                 Result.success(bytes)
             } else {
+                Timber.e("Failed to download file: HTTP $responseCode")
                 Result.failure(IOException("HTTP error: $responseCode"))
             }
         } catch (e: Exception) {
@@ -135,6 +141,7 @@ class SyncClipboardClient(
             if (responseCode in 200..299) {
                 Result.success(Unit)
             } else {
+                Timber.e("Failed to upload file $filename: HTTP $responseCode")
                 Result.failure(IOException("HTTP error: $responseCode"))
             }
         } catch (e: Exception) {

@@ -54,6 +54,7 @@
         android:roundIcon="@mipmap/app_icon_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.FcitxAppTheme"
+        android:usesCleartextTraffic="true"
         tools:targetApi="33">
         <activity
             android:name=".ui.setup.SetupActivity"

@@ -325,6 +325,9 @@
 
     <string name="sync_clipboard_screenshot_detection">Screenshot detection</string>
     <string name="sync_clipboard_screenshot_auto_upload">Auto-upload screenshots</string>
+    <string name="sync_clipboard_save_to_gallery">Save to System Gallery</string>
+    <string name="sync_clipboard_auto_clear_gallery">Auto Clear Gallery</string>
+    <string name="sync_clipboard_gallery_clear_interval">Clear Interval (Days)</string>
     <string name="sync_clipboard_media_permission_title">Media Permission Required</string>
     <string name="sync_clipboard_media_permission_desc">Screenshot detection requires access to photos and media. Please grant the permission to enable this feature.</string>
     <!-- Image clipboard -->

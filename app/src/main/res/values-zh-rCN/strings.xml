@@ -325,6 +325,9 @@
 
     <string name="sync_clipboard_screenshot_detection">将最近的屏幕截图保存到剪贴板</string>
     <string name="sync_clipboard_screenshot_auto_upload">自动上传截图</string>
+    <string name="sync_clipboard_save_to_gallery">保存到系统相册</string>
+    <string name="sync_clipboard_auto_clear_gallery">自动清理相册</string>
+    <string name="sync_clipboard_gallery_clear_interval">清理间隔（天）</string>
     <string name="sync_clipboard_media_permission_title">需要媒体访问权限</string>
     <string name="sync_clipboard_media_permission_desc">截图检测需要访问照片和媒体的权限。请授予权限以启用此功能。</string>
     <!-- Image clipboard -->

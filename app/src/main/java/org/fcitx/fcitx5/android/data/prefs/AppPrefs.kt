@@ -370,6 +370,27 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             "sync_clipboard_screenshot_auto_upload",
             false
         ) { screenshotDetection.getValue() && enabled.getValue() }
+
+        val saveToGallery = switch(
+            R.string.sync_clipboard_save_to_gallery,
+            "sync_clipboard_save_to_gallery",
+            false
+        ) { enabled.getValue() }
+
+        val autoClearGallery = switch(
+            R.string.sync_clipboard_auto_clear_gallery,
+            "sync_clipboard_auto_clear_gallery",
+            false
+        ) { enabled.getValue() && saveToGallery.getValue() }
+
+        val galleryClearInterval = int(
+            R.string.sync_clipboard_gallery_clear_interval,
+            "sync_clipboard_gallery_clear_interval",
+            1,
+            1,
+            365,
+            ""
+        ) { enabled.getValue() && saveToGallery.getValue() && autoClearGallery.getValue() }
     }
 
     // 验证码提取设置

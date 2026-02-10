@@ -5,7 +5,11 @@
 package org.fcitx.fcitx5.android.data.syncclipboard
 
 import android.content.ClipData
+import android.content.ContentValues
 import android.graphics.Bitmap
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.annotation.Keep
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,9 +46,20 @@ object SyncClipboardManager : CoroutineScope by CoroutineScope(SupervisorJob() +
         }
     }
 
+    private var cleanupJob: kotlinx.coroutines.Job? = null
+
+    private val cleanupListener = ManagedPreference.OnChangeListener<Any> { _, _ ->
+        scheduleCleanup()
+    }
+
     fun init() {
         Timber.i("SyncClipboardManager: init called")
         prefs.enabled.registerOnChangeListener(enabledListener)
+        
+        // Register listeners for cleanup
+        prefs.saveToGallery.registerOnChangeListener(cleanupListener)
+        prefs.autoClearGallery.registerOnChangeListener(cleanupListener)
+        prefs.galleryClearInterval.registerOnChangeListener(cleanupListener)
         
         ClipboardManager.addOnUpdateListener(clipboardListener)
         
@@ -57,6 +72,75 @@ object SyncClipboardManager : CoroutineScope by CoroutineScope(SupervisorJob() +
         
         // Initialize screenshot detector
         ScreenshotDetector.init()
+
+        // Initial cleanup schedule
+        scheduleCleanup()
+    }
+
+    private fun scheduleCleanup() {
+        cleanupJob?.cancel()
+        if (prefs.enabled.getValue() && prefs.saveToGallery.getValue() && prefs.autoClearGallery.getValue()) {
+            cleanupJob = launch {
+                while (true) {
+                    cleanOldGalleryImages()
+                    // Check every hour effectively
+                    kotlinx.coroutines.delay(3600000L)
+                }
+            }
+        }
+    }
+
+    // ... (existing code)
+
+    private suspend fun cleanOldGalleryImages() {
+        val intervalDays = prefs.galleryClearInterval.getValue()
+        Timber.d("SyncClipboard: cleanOldGalleryImages called. Interval=${intervalDays} days")
+        
+        if (intervalDays <= 0) {
+            Timber.d("SyncClipboard: Cleanup disabled (interval <= 0)")
+            return
+        }
+
+        // DATE_ADDED is in seconds
+        val now = System.currentTimeMillis() / 1000
+        val cutoff = now - (intervalDays * 24 * 3600)
+        Timber.d("SyncClipboard: Cleanup cutoff time: $cutoff (Now: $now)")
+        
+        val resolver = appContext.contentResolver
+
+        val selection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            "${MediaStore.Images.Media.DATE_ADDED} < ? AND ${MediaStore.Images.Media.RELATIVE_PATH} LIKE ?"
+        } else {
+            "${MediaStore.Images.Media.DATE_ADDED} < ? AND ${MediaStore.Images.Media.DATA} LIKE ?"
+        }
+
+        val selectionArgs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            arrayOf(cutoff.toString(), "%Pictures/Fcitx5%")
+        } else {
+            arrayOf(cutoff.toString(), "%/Pictures/Fcitx5/%")
+        }
+
+        try {
+            // First count how many would be deleted (optional, for debugging)
+            val projection = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_ADDED, MediaStore.Images.Media.DISPLAY_NAME)
+            resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, selection, selectionArgs, null)?.use { cursor ->
+                Timber.d("SyncClipboard: Found ${cursor.count} images to delete")
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(2)
+                    val dateAdded = cursor.getLong(1)
+                    Timber.d("SyncClipboard: Will delete: $name (Added: $dateAdded, Cutoff: $cutoff)")
+                }
+            }
+
+            val count = resolver.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, selection, selectionArgs)
+            if (count > 0) {
+                Timber.i("SyncClipboard: Cleaned $count old images from gallery")
+            } else {
+                Timber.d("SyncClipboard: No images needed cleanup")
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "SyncClipboard: Failed to clean old gallery images")
+        }
     }
 
     private fun createSignalRClient(): SyncClipboardSignalR? {
@@ -175,6 +259,9 @@ object SyncClipboardManager : CoroutineScope by CoroutineScope(SupervisorJob() +
                         val imageResult = httpClient.downloadFile(dataName)
                         imageResult.onSuccess { bytes ->
                             saveImageToClipboardHistory(bytes, dataName)
+                            if (prefs.saveToGallery.getValue()) {
+                                saveToGallery(bytes, dataName)
+                            }
                             Timber.d("SyncClipboard: Downloaded file from server: $dataName")
                         }
                     }
@@ -330,4 +417,38 @@ object SyncClipboardManager : CoroutineScope by CoroutineScope(SupervisorJob() +
         // 4. Return as Uppercase Hex
         return finalHashBytes.joinToString("") { "%02X".format(it) }
     }
+
+    private suspend fun saveToGallery(bytes: ByteArray, filename: String) {
+        val context = appContext
+        val resolver = context.contentResolver
+        val contentValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Fcitx5")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+        }
+
+        try {
+            val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+            if (uri != null) {
+                resolver.openOutputStream(uri)?.use { stream ->
+                    stream.write(bytes)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    contentValues.clear()
+                    contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                    resolver.update(uri, contentValues, null, null)
+                }
+                Timber.d("SyncClipboard: Saved image to gallery: $uri")
+            } else {
+                Timber.w("SyncClipboard: Failed to create gallery entry")
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "SyncClipboard: Failed to save to gallery")
+        }
+    }
+
+
 }

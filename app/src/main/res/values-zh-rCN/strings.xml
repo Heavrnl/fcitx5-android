@@ -351,5 +351,6 @@
     <string name="verification_code_grant_access">前往开启</string>
     <string name="verification_code_extracted">已提取验证码：%1$s</string>
     <string name="verification_code_copied">验证码已复制到剪贴板</string>
+    <string name="open_link">打开链接</string>
 </resources>
 

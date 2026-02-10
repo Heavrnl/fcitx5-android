@@ -26,6 +26,7 @@ abstract class ClipboardAdapter(
 
     companion object {
         private val diffCallback = object : DiffUtil.ItemCallback<ClipboardEntry>() {
+// ... existing diffCallback ...
             override fun areItemsTheSame(
                 oldItem: ClipboardEntry,
                 newItem: ClipboardEntry
@@ -105,6 +106,18 @@ abstract class ClipboardAdapter(
                 val popup = PopupMenu(ctx, root)
                 val menu = popup.menu
                 val iconTint = ctx.styledColor(android.R.attr.colorControlNormal)
+
+                // Detect URL
+                if (!entry.isImage) {
+                    val match = android.util.Patterns.WEB_URL.matcher(entry.text)
+                    if (match.find()) {
+                        val url = match.group()
+                        menu.item(R.string.open_link, R.drawable.ic_baseline_open_in_browser_24, iconTint) {
+                            onOpenUrl(url)
+                        }
+                    }
+                }
+
                 if (entry.pinned) {
                     menu.item(R.string.unpin, R.drawable.ic_outline_push_pin_24, iconTint) {
                         onUnpin(entry.id)
@@ -163,6 +176,7 @@ abstract class ClipboardAdapter(
 
     abstract fun onShare(entry: ClipboardEntry)
 
-    abstract fun onDelete(id: Int)
+    abstract fun onOpenUrl(url: String)
 
+    abstract fun onDelete(id: Int)
 }

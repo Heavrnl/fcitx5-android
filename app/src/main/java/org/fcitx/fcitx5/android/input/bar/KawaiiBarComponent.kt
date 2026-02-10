@@ -119,6 +119,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
                 if (it.isImage) {
                     // 图片类型：显示缩略图和简短文本
                     idleUi.clipboardUi.icon.visibility = View.GONE
+                    idleUi.clipboardUi.openLinkButton.visibility = View.GONE
                     idleUi.clipboardUi.image.visibility = View.VISIBLE
                     idleUi.clipboardUi.text.text = context.getString(R.string.clipboard_image_simple)
 
@@ -157,6 +158,28 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
                     // 文本类型：恢复图标显示
                     idleUi.clipboardUi.icon.visibility = View.VISIBLE
                     idleUi.clipboardUi.image.visibility = View.GONE
+                    
+                    // URL Check
+                    val match = android.util.Patterns.WEB_URL.matcher(it.text)
+                    if (match.find()) {
+                        val url = match.group()
+                        idleUi.clipboardUi.openLinkButton.visibility = View.VISIBLE
+                        idleUi.clipboardUi.openLinkButton.setOnClickListener {
+                             try {
+                                val finalUrl = if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                                    "http://$url"
+                                } else url
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(finalUrl)).apply {
+                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                service.startActivity(intent)
+                             } catch (e: Exception) {
+                                 timber.log.Timber.e(e, "Failed to open URL: $url")
+                             }
+                        }
+                    } else {
+                        idleUi.clipboardUi.openLinkButton.visibility = View.GONE
+                    }
 
                     idleUi.clipboardUi.text.text = if (it.sensitive && clipboardMaskSensitive) {
                         ClipboardEntry.BULLET.repeat(min(42, it.text.length))

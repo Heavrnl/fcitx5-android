@@ -20,9 +20,14 @@ import org.fcitx.fcitx5.android.utils.rippleDrawable
 import splitties.dimensions.dp
 import splitties.resources.drawable
 import splitties.views.dsl.constraintlayout.centerInParent
+import splitties.views.dsl.constraintlayout.centerVertically
 import splitties.views.dsl.constraintlayout.constraintLayout
+import splitties.views.dsl.constraintlayout.endOfParent
+import splitties.views.dsl.constraintlayout.endToStartOf
 import splitties.views.dsl.constraintlayout.lParams
 import splitties.views.dsl.constraintlayout.matchConstraints
+import splitties.views.dsl.constraintlayout.startOfParent
+import splitties.views.dsl.constraintlayout.startToEndOf
 import splitties.views.dsl.core.Ui
 import splitties.views.dsl.core.add
 import splitties.views.dsl.core.horizontalLayout
@@ -43,6 +48,15 @@ class ClipboardSuggestionUi(override val ctx: Context, private val theme: Theme)
         imageDrawable = drawable(R.drawable.ic_clipboard)!!.apply {
             setTint(theme.altKeyTextColor)
         }
+    }
+
+    val openLinkButton = imageView {
+        visibility = android.view.View.GONE
+        imageDrawable = drawable(R.drawable.ic_baseline_open_in_browser_24)!!.apply {
+            setTint(theme.altKeyTextColor)
+        }
+        setPadding(dp(10), dp(10), dp(10), dp(10))
+        background = rippleDrawable(theme.keyPressHighlightColor)
     }
 
     val image = imageView {
@@ -111,8 +125,18 @@ class ClipboardSuggestionUi(override val ctx: Context, private val theme: Theme)
     }
 
     override val root = constraintLayout {
+        add(openLinkButton, lParams(dp(40), dp(40)) {
+            startOfParent()
+            endToStartOf(suggestionView)
+            centerVertically()
+            horizontalChainStyle = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.CHAIN_PACKED
+            rightMargin = dp(8) // Space between button and suggestion
+        })
+
         add(suggestionView, lParams(wrapContent, matchConstraints) {
-            centerInParent()
+            startToEndOf(openLinkButton)
+            endOfParent()
+            centerVertically()
             verticalMargin = dp(4)
         })
     }

@@ -24,6 +24,7 @@ import splitties.views.dsl.constraintlayout.centerVertically
 import splitties.views.dsl.constraintlayout.constraintLayout
 import splitties.views.dsl.constraintlayout.endOfParent
 import splitties.views.dsl.constraintlayout.lParams
+import splitties.views.dsl.constraintlayout.startOfParent
 import splitties.views.dsl.constraintlayout.topOfParent
 import splitties.views.dsl.core.Ui
 import splitties.views.dsl.core.add
@@ -60,6 +61,8 @@ class ClipboardEntryUi(override val ctx: Context, private val theme: Theme, radi
             setAlpha(0.3f)
         }
     }
+
+
 
     val layout = constraintLayout {
         add(textView, lParams(matchParent, wrapContent) {

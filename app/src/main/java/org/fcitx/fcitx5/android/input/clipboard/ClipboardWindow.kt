@@ -144,6 +144,21 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 service.startActivity(chooser)
+                service.startActivity(chooser)
+            }
+
+            override fun onOpenUrl(url: String) {
+                try {
+                    val finalUrl = if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                        "http://$url"
+                    } else url
+                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(finalUrl)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    service.startActivity(intent)
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to open URL: $url")
+                }
             }
 
             override fun onDelete(id: Int) {

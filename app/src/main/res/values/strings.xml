@@ -351,5 +351,6 @@
     <string name="verification_code_grant_access">Grant access</string>
     <string name="verification_code_extracted">Verification code extracted: %1$s</string>
     <string name="verification_code_copied">Code copied to clipboard</string>
+    <string name="open_link">Open Link</string>
 </resources>
 

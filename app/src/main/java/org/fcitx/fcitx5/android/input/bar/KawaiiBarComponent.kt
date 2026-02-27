@@ -306,6 +306,9 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
                 clipboardButton.setOnClickListener {
                     windowManager.attachWindow(ClipboardWindow())
                 }
+                quickPhraseButton.setOnClickListener {
+                    windowManager.attachWindow(org.fcitx.fcitx5.android.input.quickphrase.QuickPhraseWindow())
+                }
                 moreButton.setOnClickListener {
                     windowManager.attachWindow(StatusAreaWindow())
                 }

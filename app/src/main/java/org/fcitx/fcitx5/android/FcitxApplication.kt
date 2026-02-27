@@ -134,6 +134,7 @@ class FcitxApplication : Application() {
             setValue(currentPid)
         }
         ClipboardManager.init(ctx)
+        org.fcitx.fcitx5.android.data.quickphrase.QuickPhraseManager.init(ctx)
         org.fcitx.fcitx5.android.data.syncclipboard.SyncClipboardManager.init()
         org.fcitx.fcitx5.android.data.verification.VerificationCodeManager.init()
         ThemeManager.init(resources.configuration)

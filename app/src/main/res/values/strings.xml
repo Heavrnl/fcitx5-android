@@ -301,6 +301,7 @@
     <string name="move_cursor_right">Move cursor right</string>
     <string name="move_cursor_down">Move cursor down</string>
     <string name="move_cursor_left">Move cursor left</string>
+    <string name="quickphrase">Quick Phrase</string>
     <string name="move_cursor_to_start">Move cursor to start</string>
     <string name="move_cursor_to_end">Move cursor to end</string>
     <string name="open_input_method_settings">Open input method settings</string>
@@ -352,5 +353,16 @@
     <string name="verification_code_extracted">Verification code extracted: %1$s</string>
     <string name="verification_code_copied">Code copied to clipboard</string>
     <string name="open_link">Open Link</string>
+    <string name="quickphrase_edit_phrase">Edit Phrase</string>
+    <string name="quickphrase_new_phrase">New Phrase</string>
+    <string name="quickphrase_title_hint">(Optional) Title</string>
+    <string name="quickphrase_shortcut_hint">Shortcuts (e.g. ph,tele comma separated)</string>
+    <string name="quickphrase_edit_category">Edit Category</string>
+    <string name="quickphrase_new_category">New Category</string>
+    <string name="quickphrase_category_recent">Recently Used</string>
+    <string name="quickphrase_category_default">Default</string>
+    <string name="quickphrase_sort_by_name">By Name</string>
+    <string name="quickphrase_sort_by_creation_time">By Creation Time</string>
+    <string name="quickphrase_sort_by_modification_time">By Modification Time</string>
+    <string name="quickphrase_sort_by_last_used">By Last Used Time</string>
 </resources>
-

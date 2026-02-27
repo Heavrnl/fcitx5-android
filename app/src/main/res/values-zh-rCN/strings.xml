@@ -352,5 +352,17 @@
     <string name="verification_code_extracted">已提取验证码：%1$s</string>
     <string name="verification_code_copied">验证码已复制到剪贴板</string>
     <string name="open_link">打开链接</string>
+    <string name="quickphrase">快捷短语</string>
+    <string name="quickphrase_edit_phrase">编辑短语</string>
+    <string name="quickphrase_new_phrase">新建短语</string>
+    <string name="quickphrase_title_hint">(可选) 标题</string>
+    <string name="quickphrase_shortcut_hint">快捷词 (如 ph,tele 逗号分隔)</string>
+    <string name="quickphrase_edit_category">编辑分组</string>
+    <string name="quickphrase_new_category">新建分组</string>
+    <string name="quickphrase_category_recent">最近使用</string>
+    <string name="quickphrase_category_default">默认</string>
+    <string name="quickphrase_sort_by_name">按名称</string>
+    <string name="quickphrase_sort_by_creation_time">按创建时间</string>
+    <string name="quickphrase_sort_by_modification_time">按修改时间</string>
+    <string name="quickphrase_sort_by_last_used">按最后使用</string>
 </resources>
-

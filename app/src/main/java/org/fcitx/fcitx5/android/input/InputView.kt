@@ -104,6 +104,7 @@ class InputView(
     private val commonKeyActionListener = CommonKeyActionListener()
     private val windowManager = InputWindowManager()
     private val kawaiiBar = KawaiiBarComponent()
+    private val quickPhraseSuggestion = org.fcitx.fcitx5.android.input.quickphrase.QuickPhraseSuggestionComponent()
     private val horizontalCandidate = HorizontalCandidateComponent()
     private val keyboardWindow = KeyboardWindow()
     private val symbolPicker = symbolPicker()
@@ -125,6 +126,7 @@ class InputView(
         scope += commonKeyActionListener
         scope += windowManager
         scope += kawaiiBar
+        scope += quickPhraseSuggestion
         scope += horizontalCandidate
         broadcaster.onScopeSetupFinished(scope)
     }
@@ -215,8 +217,12 @@ class InputView(
                 centerVertically()
                 centerHorizontally()
             })
-            add(kawaiiBar.view, lParams(matchParent, dp(KawaiiBarComponent.HEIGHT)) {
+            add(quickPhraseSuggestion.ui.root, lParams(matchParent, wrapContent) {
                 topOfParent()
+                centerHorizontally()
+            })
+            add(kawaiiBar.view, lParams(matchParent, dp(KawaiiBarComponent.HEIGHT)) {
+                below(quickPhraseSuggestion.ui.root)
                 centerHorizontally()
             })
             add(leftPaddingSpace, lParams {

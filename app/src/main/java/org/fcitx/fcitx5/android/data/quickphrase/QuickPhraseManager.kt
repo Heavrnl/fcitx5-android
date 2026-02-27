@@ -4,8 +4,16 @@
  */
 package org.fcitx.fcitx5.android.data.quickphrase
 
+import android.content.Context
+import androidx.room.Room
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.data.DataManager
+import org.fcitx.fcitx5.android.data.quickphrase.db.QuickPhraseCategory
+import org.fcitx.fcitx5.android.data.quickphrase.db.QuickPhraseDao
+import org.fcitx.fcitx5.android.data.quickphrase.db.QuickPhraseDatabase
 import org.fcitx.fcitx5.android.utils.appContext
 import org.fcitx.fcitx5.android.utils.errorRuntime
 import org.fcitx.fcitx5.android.utils.withTempDir
@@ -13,6 +21,26 @@ import java.io.File
 import java.io.InputStream
 
 object QuickPhraseManager {
+
+    lateinit var db: QuickPhraseDatabase
+        private set
+    lateinit var dao: QuickPhraseDao
+        private set
+
+    @OptIn(DelicateCoroutinesApi::class)
+    fun init(context: Context) {
+        db = Room.databaseBuilder(context, QuickPhraseDatabase::class.java, "quickphrase_db")
+            .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
+            .build()
+        dao = db.quickPhraseDao()
+
+        GlobalScope.launch {
+            if (dao.getCategoryCount() == 0) {
+                dao.insertCategory(QuickPhraseCategory(name = context.getString(R.string.quickphrase_category_recent), sortOrder = 0))
+                dao.insertCategory(QuickPhraseCategory(name = context.getString(R.string.quickphrase_category_default), sortOrder = 1))
+            }
+        }
+    }
 
     private val builtinQuickPhraseDir = File(
         DataManager.dataDir, "usr/share/fcitx5/data/quickphrase.d"

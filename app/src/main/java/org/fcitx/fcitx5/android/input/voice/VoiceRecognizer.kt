@@ -35,6 +35,11 @@ class VoiceRecognizer(
     private var webSocket: WebSocket? = null
     private val client = OkHttpClient()
 
+    // 录音缓冲：WebSocket 未就绪时暂存音频数据
+    @Volatile
+    private var wsReady = false
+    private val audioBuffer = mutableListOf<Pair<ShortArray, Int>>()
+
     private val sampleRate = 16000
     private val channelConfig = AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
@@ -66,6 +71,33 @@ class VoiceRecognizer(
         } catch (e: Exception) {
             Timber.e(e, "Failed to start recording")
             onError("启动录音失败: ${e.message}")
+            return
+        }
+
+        // 立即启动录音，在 WebSocket 连接期间缓冲音频数据
+        try {
+            audioRecord?.startRecording()
+            isRecording = true
+            recordingJob = scope.launch(Dispatchers.IO) {
+                val buffer = ShortArray(bufferSize)
+                while (isActive && isRecording) {
+                    val readSize = audioRecord?.read(buffer, 0, buffer.size) ?: 0
+                    if (readSize > 0) {
+                        if (wsReady) {
+                            // WebSocket 已就绪，直接发送
+                            sendAudioBuffer(buffer, readSize)
+                        } else {
+                            // WebSocket 未就绪，缓冲数据
+                            synchronized(audioBuffer) {
+                                audioBuffer.add(Pair(buffer.copyOf(), readSize))
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error starting audio read loop")
+            onError("录音读取失败")
             return
         }
 
@@ -115,24 +147,14 @@ class VoiceRecognizer(
                 Timber.i("session.update JSON: $sessionJson")
                 webSocket.send(sessionJson)
 
-                try {
-                    audioRecord?.startRecording()
-                    isRecording = true
-                    recordingJob = scope.launch(Dispatchers.IO) {
-                        val buffer = ShortArray(bufferSize)
-                        while (isActive && isRecording) {
-                            val readSize = audioRecord?.read(buffer, 0, buffer.size) ?: 0
-                            if (readSize > 0) {
-                                sendAudioBuffer(buffer, readSize)
-                            }
-                        }
+                // 发送 WebSocket 连接期间缓冲的音频数据
+                synchronized(audioBuffer) {
+                    for ((buf, size) in audioBuffer) {
+                        sendAudioBuffer(buf, size)
                     }
-                } catch (e: Exception) {
-                    Timber.e(e, "Error starting audio read loop")
-                    scope.launch(Dispatchers.Main) {
-                        onError("录音读取失败")
-                    }
+                    audioBuffer.clear()
                 }
+                wsReady = true
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -229,8 +251,12 @@ class VoiceRecognizer(
     
     private fun stopInternal() {
         isRecording = false
+        wsReady = false
         recordingJob?.cancel()
         recordingJob = null
+        synchronized(audioBuffer) {
+            audioBuffer.clear()
+        }
         try {
             audioRecord?.stop()
             audioRecord?.release()

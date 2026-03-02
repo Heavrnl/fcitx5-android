@@ -1,6 +1,12 @@
 package org.fcitx.fcitx5.android.input.voice
 
+import android.animation.ArgbEvaluator
+import android.animation.ValueAnimator
+import android.view.animation.OvershootInterpolator
 import android.content.Context
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
+import android.content.res.ColorStateList
 import android.widget.ImageView
 import androidx.core.view.setPadding
 import org.fcitx.fcitx5.android.R
@@ -45,11 +51,18 @@ class VoiceUi(override val ctx: Context, private val theme: Theme) : Ui {
 
     val recordButton = imageView {
         setImageResource(R.drawable.ic_baseline_keyboard_voice_24)
-        imageTintList = android.content.res.ColorStateList.valueOf(theme.accentKeyTextColor)
-        background = android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.OVAL
+        imageTintList = ColorStateList.valueOf(theme.accentKeyTextColor)
+        
+        val content = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
             setColor(theme.accentKeyBackgroundColor)
         }
+        val mask = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(0xFFFFFFFF.toInt())
+        }
+        background = RippleDrawable(ColorStateList.valueOf(0x40FFFFFF), content, mask)
+        
         scaleType = ImageView.ScaleType.FIT_CENTER
         setPadding(dp(16))
     }
@@ -100,11 +113,56 @@ class VoiceUi(override val ctx: Context, private val theme: Theme) : Ui {
         })
     }
 
+    private var colorAnimator: ValueAnimator? = null
+    private var iconColorAnimator: ValueAnimator? = null
+
     fun setRecordingState(isRecording: Boolean) {
-        val bgColor = if (isRecording) 0xFFE53935.toInt() else theme.accentKeyBackgroundColor
-        val iconColor = if (isRecording) 0xFFFFFFFF.toInt() else theme.accentKeyTextColor
+        val nextBgColor = if (isRecording) 0xFFE53935.toInt() else theme.accentKeyBackgroundColor
+        val nextIconColor = if (isRecording) 0xFFFFFFFF.toInt() else theme.accentKeyTextColor
         
-        recordButton.imageTintList = android.content.res.ColorStateList.valueOf(iconColor)
-        (recordButton.background as? android.graphics.drawable.GradientDrawable)?.setColor(bgColor)
+        val currentBgColor = ((recordButton.background as? RippleDrawable)?.getDrawable(0) as? GradientDrawable)?.color?.defaultColor ?: theme.accentKeyBackgroundColor
+        val currentIconColor = recordButton.imageTintList?.defaultColor ?: theme.accentKeyTextColor
+
+        colorAnimator?.cancel()
+        iconColorAnimator?.cancel()
+
+        // 颜色切换增加弹性插值器
+        val bounceInterpolator = OvershootInterpolator(1.5f)
+
+        colorAnimator = ValueAnimator.ofObject(ArgbEvaluator(), currentBgColor, nextBgColor).apply {
+            duration = 400
+            interpolator = bounceInterpolator
+            addUpdateListener { animator ->
+                val color = animator.animatedValue as Int
+                ((recordButton.background as? RippleDrawable)?.getDrawable(0) as? GradientDrawable)?.setColor(color)
+            }
+            start()
+        }
+
+        iconColorAnimator = ValueAnimator.ofObject(ArgbEvaluator(), currentIconColor, nextIconColor).apply {
+            duration = 400
+            interpolator = bounceInterpolator
+            addUpdateListener { animator ->
+                val color = animator.animatedValue as Int
+                recordButton.imageTintList = ColorStateList.valueOf(color)
+            }
+            start()
+        }
+
+        // Q弹缩放反馈
+        recordButton.animate()
+            .scaleX(1.15f)
+            .scaleY(1.15f)
+            .setDuration(200)
+            .setInterpolator(OvershootInterpolator(3.0f))
+            .withEndAction {
+                recordButton.animate()
+                    .scaleX(1.0f)
+                    .scaleY(1.0f)
+                    .setDuration(200)
+                    .setInterpolator(OvershootInterpolator(1.5f))
+                    .start()
+            }
+            .start()
     }
 }

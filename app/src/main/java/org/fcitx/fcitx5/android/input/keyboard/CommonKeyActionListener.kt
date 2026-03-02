@@ -6,6 +6,7 @@
 package org.fcitx.fcitx5.android.input.keyboard
 
 import androidx.core.content.ContextCompat
+import org.fcitx.fcitx5.android.input.bar.KawaiiBarComponent
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.core.FcitxAPI
@@ -54,6 +55,7 @@ class CommonKeyActionListener :
     private val preeditState: PreeditEmptyStateComponent by manager.must()
     private val horizontalCandidate: HorizontalCandidateComponent by manager.must()
     private val windowManager: InputWindowManager by manager.must()
+    private val kawaiiBar: KawaiiBarComponent by manager.must()
 
     private var lastPickerType by AppPrefs.getInstance().internal.lastPickerType
 
@@ -80,15 +82,18 @@ class CommonKeyActionListener :
                 },
                 onError = { err ->
                     timber.log.Timber.e("Voice recognition error: $err")
+                    kawaiiBar.hideVoiceListening()
                 }
             )
         }
+        kawaiiBar.showVoiceListening()
         voiceRecognizer?.start()
     }
 
     private fun stopVoiceRecognition() {
         voiceRecognizer?.stop()
         service.currentInputConnection?.finishComposingText()
+        kawaiiBar.hideVoiceListening()
     }
 
     // there should be a new fcitx API for this

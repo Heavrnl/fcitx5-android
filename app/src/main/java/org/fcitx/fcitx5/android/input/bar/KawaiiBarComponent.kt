@@ -5,11 +5,18 @@
 package org.fcitx.fcitx5.android.input.bar
 
 import android.graphics.Color
+import android.animation.ArgbEvaluator
+import android.animation.ValueAnimator
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.util.Size
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.Animation
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
+import android.view.animation.TranslateAnimation
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InlineSuggestion
 import android.view.inputmethod.InlineSuggestionsResponse
@@ -49,6 +56,7 @@ import org.fcitx.fcitx5.android.input.bar.KawaiiBarStateMachine.TransitionEvent.
 import org.fcitx.fcitx5.android.input.bar.ui.CandidateUi
 import org.fcitx.fcitx5.android.input.bar.ui.IdleUi
 import org.fcitx.fcitx5.android.input.bar.ui.TitleUi
+import org.fcitx.fcitx5.android.input.bar.ui.VoiceListeningUi
 import org.fcitx.fcitx5.android.input.broadcast.InputBroadcastReceiver
 import org.fcitx.fcitx5.android.input.candidates.expanded.ExpandedCandidateStyle
 import org.fcitx.fcitx5.android.input.candidates.expanded.window.FlexboxExpandedCandidateWindow
@@ -377,6 +385,12 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
         TitleUi(context, theme)
     }
 
+    private val voiceListeningUi by lazy {
+        VoiceListeningUi(context, theme)
+    }
+
+    private var savedBarChildIndex = 0
+
     private val barStateMachine = KawaiiBarStateMachine.new {
         switchUiByState(it)
     }
@@ -428,6 +442,11 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private fun switchUiByState(state: KawaiiBarStateMachine.State) {
         val index = state.ordinal
         if (view.displayedChild == index) return
+
+        // 普通状态切换不使用滑动动画
+        view.inAnimation = null
+        view.outAnimation = null
+
         val new = view.getChildAt(index)
         if (new != titleUi.root) {
             titleUi.setReturnButtonOnClickListener { }
@@ -442,9 +461,76 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
             backgroundColor =
                 if (ThemeManager.prefs.keyBorder.getValue()) Color.TRANSPARENT
                 else theme.barColor
+            
             add(idleUi.root, lParams(matchParent, matchParent))
             add(candidateUi.root, lParams(matchParent, matchParent))
             add(titleUi.root, lParams(matchParent, matchParent))
+            add(voiceListeningUi.root, lParams(matchParent, matchParent))
+        }
+    }
+
+    private var barBgColorAnimator: ValueAnimator? = null
+
+    private fun setSlideAnimation() {
+        // 统一左入右出效果
+        val inAnim = TranslateAnimation(
+            Animation.RELATIVE_TO_PARENT, -1.0f,
+            Animation.RELATIVE_TO_PARENT, 0.0f,
+            Animation.RELATIVE_TO_SELF, 0.0f,
+            Animation.RELATIVE_TO_SELF, 0.0f
+        ).apply {
+            duration = 500
+            interpolator = OvershootInterpolator(1.2f)
+        }
+        val outAnim = TranslateAnimation(
+            Animation.RELATIVE_TO_PARENT, 0.0f,
+            Animation.RELATIVE_TO_PARENT, 1.0f,
+            Animation.RELATIVE_TO_SELF, 0.0f,
+            Animation.RELATIVE_TO_SELF, 0.0f
+        ).apply {
+            duration = 400
+            interpolator = DecelerateInterpolator()
+        }
+        view.inAnimation = inAnim
+        view.outAnimation = outAnim
+    }
+
+    fun showVoiceListening() {
+        savedBarChildIndex = view.displayedChild
+        
+        val startColor = (view.background as? ColorDrawable)?.color ?: theme.barColor
+        val endColor = theme.accentKeyBackgroundColor
+        
+        barBgColorAnimator?.cancel()
+        barBgColorAnimator = ValueAnimator.ofObject(ArgbEvaluator(), startColor, endColor).apply {
+            duration = 300
+            addUpdateListener { animator ->
+                view.setBackgroundColor(animator.animatedValue as Int)
+            }
+            start()
+        }
+        
+        setSlideAnimation()
+        view.displayedChild = 3
+    }
+
+    fun hideVoiceListening() {
+        if (view.displayedChild == 3) {
+            val startColor = (view.background as? ColorDrawable)?.color ?: theme.accentKeyBackgroundColor
+            val endColor = if (ThemeManager.prefs.keyBorder.getValue()) Color.TRANSPARENT
+                          else theme.barColor
+            
+            barBgColorAnimator?.cancel()
+            barBgColorAnimator = ValueAnimator.ofObject(ArgbEvaluator(), startColor, endColor).apply {
+                duration = 300
+                addUpdateListener { animator ->
+                    view.setBackgroundColor(animator.animatedValue as Int)
+                }
+                start()
+            }
+            
+            setSlideAnimation()
+            view.displayedChild = savedBarChildIndex
         }
     }
 

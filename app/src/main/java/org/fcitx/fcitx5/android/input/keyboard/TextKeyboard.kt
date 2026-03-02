@@ -16,8 +16,15 @@ import org.fcitx.fcitx5.android.core.KeyStates
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 import org.fcitx.fcitx5.android.data.theme.Theme
+import org.fcitx.fcitx5.android.input.picker.PickerWindow
 import org.fcitx.fcitx5.android.input.popup.PopupAction
+import org.fcitx.fcitx5.android.input.handwriting.HandwritingEngine
+import org.fcitx.fcitx5.android.input.keyboard.HandwritingOverlayView
+import android.view.MotionEvent
+import android.view.ViewConfiguration
+import android.os.SystemClock
 import splitties.views.imageResource
+import kotlin.math.abs
 
 @SuppressLint("ViewConstructor")
 class TextKeyboard(
@@ -66,11 +73,12 @@ class TextKeyboard(
                 BackspaceKey()
             ),
             listOf(
-                LayoutSwitchKey("?123", ""),
+                LayoutSwitchKey("符", PickerWindow.Key.Symbol.name, 0.12f, KeyDef.Appearance.Variant.Alternative),
+                LayoutSwitchKey("123", NumberKeyboard.Name, 0.12f, KeyDef.Appearance.Variant.Alternative),
                 CommaKey(0.1f, KeyDef.Appearance.Variant.Alternative),
-                LanguageKey(),
                 SpaceKey(),
                 SymbolKey(".", 0.1f, KeyDef.Appearance.Variant.Alternative),
+                LanguageKey(),
                 ReturnKey()
             )
         )
@@ -90,11 +98,57 @@ class TextKeyboard(
         updateLangSwitchKey(v)
     }
 
+    private val enableHandwritingPref = AppPrefs.getInstance().keyboard.enableHandwriting
+    private var enableHandwriting = enableHandwritingPref.getValue()
+    @Keep
+    private val enableHandwritingListener = ManagedPreference.OnChangeListener<Boolean> { _, v ->
+        enableHandwriting = v
+        if (!v && isWriting) {
+            handwritingOverlay.cancelWriting()
+            isWriting = false
+        }
+        handwritingOverlay.visibility = if (v) View.VISIBLE else View.GONE
+    }
+
     private val keepLettersUppercase by AppPrefs.getInstance().keyboard.keepLettersUppercase
+    
+    // 全局引擎，建议放到单例或跟随 InputView 生命周期
+    // 这里为简便先跟随 TextKeyboard 实例
+    private val handwritingEngine = HandwritingEngine()
+
+    private val touchSlop by lazy { ViewConfiguration.get(context).scaledTouchSlop }
+    private val longPressTimeout by lazy { ViewConfiguration.getLongPressTimeout().toLong() }
+    
+    // 手写触发的短按停顿阈值（150ms，比长按短，足以区分瞬间按压滑动）
+    private val writingTriggerDelay = 150L
+
+    // 手写拦截状态机
+    private var isWriting = false
+    private var startX = 0f
+    private var startY = 0f
+    private var touchStartTime = 0L
+    private var isMultiTouch = false
+    private var isSwipeIgnored = false // 这个触摸序列是否已被定性为普通的快速 Swipe（输入符号）
+
+    private val handwritingOverlay: HandwritingOverlayView by lazy {
+        HandwritingOverlayView(context, handwritingEngine) { results ->
+            if (results.isNotEmpty()) {
+                val bestMatch = results[0]
+                // 暂时使用 CommitAction 直接上屏手写首选字
+                onAction(KeyAction.CommitAction(bestMatch))
+            }
+        }
+    }
 
     init {
         updateLangSwitchKey(showLangSwitchKey.getValue())
         showLangSwitchKey.registerOnChangeListener(showLangSwitchKeyListener)
+        enableHandwritingPref.registerOnChangeListener(enableHandwritingListener)
+        
+        handwritingOverlay.visibility = if (enableHandwriting) View.VISIBLE else View.GONE
+        
+        // 置于最上层，铺满整个键盘区域
+        addView(handwritingOverlay, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
     private val textKeys: List<TextKeyView> by lazy {
@@ -149,7 +203,119 @@ class TextKeyboard(
         super.onAction(transformed, source)
     }
 
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (!enableHandwriting) {
+            return super.dispatchTouchEvent(ev)
+        }
+
+        val x = ev.x
+        val y = ev.y
+        val t = SystemClock.uptimeMillis()
+
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                startX = x
+                startY = y
+                touchStartTime = t
+                isMultiTouch = false
+                isSwipeIgnored = false
+                handwritingOverlay.resetRecognizeJob()
+
+                if (handwritingOverlay.hasInk()) {
+                    // 如果手写板上还有墨水，说明用户处于连续写字会话中。
+                    // 此时这一下“哪怕只是轻轻一点”也得算作手笔（如“二”字的第一笔点），
+                    // 绝不放行给底层键盘诱发按键高亮或穿透。立即全权接管。
+                    isWriting = true
+                    handwritingOverlay.startWriting(startX, startY, touchStartTime)
+                    return true
+                } else {
+                    isWriting = false
+                    // 干净状况：立即放行第一指接触，赋予底盘按键首发感应（譬如长按弹出小窗或点亮背景）
+                    super.dispatchTouchEvent(ev)
+                    return true
+                }
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                isMultiTouch = true
+                super.dispatchTouchEvent(ev)
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (isMultiTouch || isSwipeIgnored) {
+                    return super.dispatchTouchEvent(ev)
+                }
+
+                if (!isWriting) {
+                    val dx = abs(x - startX)
+                    val dy = abs(y - startY)
+                    
+                    // 如果移动超过了判定阈值
+                    if (dx > touchSlop || dy > touchSlop) {
+                        val touchDuration = t - touchStartTime
+                        
+                        // 首笔判断：是否在有效的时间窗口内
+                        if (touchDuration < writingTriggerDelay) {
+                            // 发生滑动的速度极快，认定为原生 Swipe (如上下划输入符号)
+                            isSwipeIgnored = true
+                            return super.dispatchTouchEvent(ev)
+                        } else if (touchDuration > longPressTimeout) {
+                            // 长按停留超过了阈值，原生按键极可能已弹出长按菜单或触发功能
+                            // 此时滑动不应强行截走变手写，而当归还系统
+                            isSwipeIgnored = true
+                            return super.dispatchTouchEvent(ev)
+                        } else {
+                            // 停顿适当时间后画首笔，切断原生事件，正式全盘接管手写
+                            isWriting = true
+
+                            // 强行用虚假的 CANCEL 吃掉底层的 DOWN
+                            val cancelEvent = MotionEvent.obtain(ev).apply { action = MotionEvent.ACTION_CANCEL }
+                            super.dispatchTouchEvent(cancelEvent)
+                            cancelEvent.recycle()
+                            
+                            // 启动画板
+                            handwritingOverlay.startWriting(startX, startY, touchStartTime)
+                            handwritingOverlay.continueWriting(x, y, t)
+                            return true
+                        }
+                    } else {
+                        // 未超过滑动阈值前，继续放养原生系统让它保持运作
+                        // 若原地按住太久，直接判定本次非手写，锁断后续的画写
+                        if (t - touchStartTime > longPressTimeout) {
+                            isSwipeIgnored = true
+                        }
+                        super.dispatchTouchEvent(ev)
+                        return true
+                    }
+                } else {
+                    // 已处于手写模式，喂给画板，彻底隔绝底层键盘
+                    handwritingOverlay.continueWriting(x, y, t)
+                    return true
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (isMultiTouch || isSwipeIgnored) {
+                    return super.dispatchTouchEvent(ev)
+                }
+
+                // 对于正在手写（刚画完长线，或者是已经被锁定的第二笔 DOWN）
+                if (isWriting) {
+                    handwritingOverlay.endWriting(x, y, t)
+                    // 但凡带有书写墨迹的时刻，我们松手就不去结算它，让定时器自动判；
+                    // 否则如果不带墨迹却在此刻松手（比如只是刚启动写就放了），那也只属于空放。
+                    isWriting = false
+                    return true
+                } else {
+                    // 没有触发手写，说明这只是个普通的短促点击
+                    super.dispatchTouchEvent(ev)
+                    return true
+                }
+            }
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
     override fun onAttach() {
+        handwritingEngine.initModel()
         capsState = CapsState.None
         updateCapsButtonIcon()
         updateAlphabetKeys()
@@ -249,6 +415,11 @@ class TextKeyboard(
                 }
             }
         }
+    }
+
+    override fun onDetach() {
+        handwritingEngine.close()
+        super.onDetach()
     }
 
 }

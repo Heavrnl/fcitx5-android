@@ -17,8 +17,8 @@
       ],
       "attributes": [],
       "versionCode": 101,
-      "versionName": "v4-0-gdacb5998",
-      "outputFile": "org.fcitx.fcitx5.android-v4-0-gdacb5998-armeabi-v7a-release.apk"
+      "versionName": "v4-1-g5cd8fe68",
+      "outputFile": "org.fcitx.fcitx5.android-v4-1-g5cd8fe68-armeabi-v7a-release.apk"
     },
     {
       "type": "ONE_OF_MANY",
@@ -30,21 +30,8 @@
       ],
       "attributes": [],
       "versionCode": 104,
-      "versionName": "v4-0-gdacb5998",
-      "outputFile": "org.fcitx.fcitx5.android-v4-0-gdacb5998-x86_64-release.apk"
-    },
-    {
-      "type": "ONE_OF_MANY",
-      "filters": [
-        {
-          "filterType": "ABI",
-          "value": "arm64-v8a"
-        }
-      ],
-      "attributes": [],
-      "versionCode": 102,
-      "versionName": "v4-0-gdacb5998",
-      "outputFile": "org.fcitx.fcitx5.android-v4-0-gdacb5998-arm64-v8a-release.apk"
+      "versionName": "v4-1-g5cd8fe68",
+      "outputFile": "org.fcitx.fcitx5.android-v4-1-g5cd8fe68-x86_64-release.apk"
     },
     {
       "type": "ONE_OF_MANY",
@@ -56,8 +43,21 @@
       ],
       "attributes": [],
       "versionCode": 103,
-      "versionName": "v4-0-gdacb5998",
-      "outputFile": "org.fcitx.fcitx5.android-v4-0-gdacb5998-x86-release.apk"
+      "versionName": "v4-1-g5cd8fe68",
+      "outputFile": "org.fcitx.fcitx5.android-v4-1-g5cd8fe68-x86-release.apk"
+    },
+    {
+      "type": "ONE_OF_MANY",
+      "filters": [
+        {
+          "filterType": "ABI",
+          "value": "arm64-v8a"
+        }
+      ],
+      "attributes": [],
+      "versionCode": 102,
+      "versionName": "v4-1-g5cd8fe68",
+      "outputFile": "org.fcitx.fcitx5.android-v4-1-g5cd8fe68-arm64-v8a-release.apk"
     }
   ],
   "elementType": "File",

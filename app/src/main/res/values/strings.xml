@@ -365,4 +365,7 @@
     <string name="quickphrase_sort_by_creation_time">By Creation Time</string>
     <string name="quickphrase_sort_by_modification_time">By Modification Time</string>
     <string name="quickphrase_sort_by_last_used">By Last Used Time</string>
+    
+    <!-- Handwriting -->
+    <string name="enable_handwriting">Enable Handwriting</string>
 </resources>

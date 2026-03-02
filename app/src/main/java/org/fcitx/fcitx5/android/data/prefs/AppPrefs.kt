@@ -147,6 +147,8 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             switch(R.string.show_voice_input_button, "show_voice_input_button", false)
         val expandKeypressArea =
             switch(R.string.expand_keypress_area, "expand_keypress_area", false)
+        val enableHandwriting =
+            switch(R.string.enable_handwriting, "enable_handwriting", true)
         val swipeSymbolDirection = enumList(
             R.string.swipe_symbol_behavior,
             "swipe_symbol_behavior",

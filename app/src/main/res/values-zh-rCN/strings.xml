@@ -365,4 +365,7 @@
     <string name="quickphrase_sort_by_creation_time">按创建时间</string>
     <string name="quickphrase_sort_by_modification_time">按修改时间</string>
     <string name="quickphrase_sort_by_last_used">按最后使用</string>
+    
+    <!-- Handwriting -->
+    <string name="enable_handwriting">启用手写功能</string>
 </resources>

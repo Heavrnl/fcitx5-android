@@ -99,6 +99,10 @@ open class KeyDef(
             val action: KeyAction
         ) : Behavior()
 
+        class LongPressRelease(
+            val action: KeyAction
+        ) : Behavior()
+
         class Repeat(
             val action: KeyAction
         ) : Behavior()

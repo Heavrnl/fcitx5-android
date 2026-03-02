@@ -38,6 +38,7 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         val needNotifications = bool("need_notifications", true)
         val quickPhraseSortBy = string("quickphrase_sort_by", "lastUsed") // "name", "id", "lastModified", "lastUsed"
         val quickPhraseSortDesc = bool("quickphrase_sort_desc", true)
+        val buttonsBarOrder = string("buttons_bar_order", "undo,redo,cursorMove,clipboard,quickPhrase,voice,more")
     }
 
     inner class Advanced : ManagedPreferenceCategory(R.string.advanced, sharedPreferences) {
@@ -446,6 +447,36 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         )
     }
 
+    inner class VoiceInput : ManagedPreferenceCategory(R.string.voice_input_settings, sharedPreferences) {
+        val voiceInputMode = enumList(
+            R.string.voice_input_mode,
+            "voice_input_mode",
+            VoiceInputMode.Click
+        )
+        val dashscopeRegion = enumList(
+            R.string.dashscope_region,
+            "dashscope_region",
+            DashScopeRegion.MainlandChina
+        )
+        val dashscopeApiKey = password(
+            R.string.dashscope_api_key, "dashscope_api_key", ""
+        )
+    }
+
+    enum class VoiceInputMode : ManagedPreferenceEnum {
+        Click { override val stringRes: Int get() = R.string.voice_input_mode_click },
+        LongPress { override val stringRes: Int get() = R.string.voice_input_mode_long_press }
+    }
+
+    enum class DashScopeRegion : ManagedPreferenceEnum {
+        MainlandChina {
+            override val stringRes: Int get() = R.string.dashscope_region_cn
+        },
+        International {
+            override val stringRes: Int get() = R.string.dashscope_region_intl
+        }
+    }
+
     private val providers = mutableListOf<ManagedPreferenceProvider>()
 
     fun <T : ManagedPreferenceProvider> registerProvider(
@@ -467,6 +498,7 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
     val syncClipboard = SyncClipboard().register()
     val verificationCode = VerificationCode().register()
     val symbols = Symbols().register()
+    val voiceInput = VoiceInput().register()
     val advanced = Advanced().register()
 
     @Keep

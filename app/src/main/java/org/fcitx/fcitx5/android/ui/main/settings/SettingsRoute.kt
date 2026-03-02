@@ -32,6 +32,7 @@ import org.fcitx.fcitx5.android.ui.main.settings.behavior.KeyboardSettingsFragme
 import org.fcitx.fcitx5.android.ui.main.settings.behavior.SymbolSettingsFragment
 import org.fcitx.fcitx5.android.ui.main.settings.behavior.SyncClipboardSettingsFragment
 import org.fcitx.fcitx5.android.ui.main.settings.behavior.VerificationCodeSettingsFragment
+import org.fcitx.fcitx5.android.ui.main.settings.behavior.VoiceInputSettingsFragment
 import org.fcitx.fcitx5.android.ui.main.settings.global.GlobalConfigFragment
 import org.fcitx.fcitx5.android.ui.main.settings.im.InputMethodConfigFragment
 import org.fcitx.fcitx5.android.ui.main.settings.im.InputMethodListFragment
@@ -93,6 +94,9 @@ sealed class SettingsRoute : Parcelable {
 
     @Serializable
     data object VerificationCode : SettingsRoute()
+
+    @Serializable
+    data object VoiceInput : SettingsRoute()
 
     @Serializable
     data object Developer : SettingsRoute()
@@ -238,6 +242,9 @@ sealed class SettingsRoute : Parcelable {
             }
             fragment<VerificationCodeSettingsFragment, VerificationCode> {
                 label = ctx.getString(R.string.verification_code)
+            }
+            fragment<VoiceInputSettingsFragment, VoiceInput> {
+                label = ctx.getString(R.string.voice_input_settings)
             }
             fragment<DeveloperFragment, Developer> {
                 label = ctx.getString(R.string.developer)

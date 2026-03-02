@@ -218,6 +218,11 @@ abstract class BaseKeyboard(
                             true
                         }
                     }
+                    is KeyDef.Behavior.LongPressRelease -> {
+                        onLongPressReleaseListener = { _ ->
+                            onAction(it.action)
+                        }
+                    }
                     is KeyDef.Behavior.Repeat -> {
                         repeatEnabled = true
                         onRepeatListener = { view ->

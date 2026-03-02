@@ -303,6 +303,9 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
                 cursorMoveButton.setOnClickListener {
                     windowManager.attachWindow(TextEditingWindow())
                 }
+                voiceButton.setOnClickListener {
+                    windowManager.attachWindow(org.fcitx.fcitx5.android.input.voice.VoiceWindow())
+                }
                 clipboardButton.setOnClickListener {
                     windowManager.attachWindow(ClipboardWindow())
                 }

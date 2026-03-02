@@ -64,6 +64,33 @@ class CommonKeyActionListener :
 
     private var backspaceSwipeState = Stopped
 
+    private var voiceRecognizer: org.fcitx.fcitx5.android.input.voice.VoiceRecognizer? = null
+
+    private fun startVoiceRecognition() {
+        if (voiceRecognizer == null) {
+            voiceRecognizer = org.fcitx.fcitx5.android.input.voice.VoiceRecognizer(
+                context,
+                service.lifecycleScope,
+                onTextResult = { text, isFinal ->
+                    if (!isFinal) {
+                        service.currentInputConnection?.setComposingText(text, 1)
+                    } else {
+                        service.commitText(text)
+                    }
+                },
+                onError = { err ->
+                    timber.log.Timber.e("Voice recognition error: $err")
+                }
+            )
+        }
+        voiceRecognizer?.start()
+    }
+
+    private fun stopVoiceRecognition() {
+        voiceRecognizer?.stop()
+        service.currentInputConnection?.finishComposingText()
+    }
+
     // there should be a new fcitx API for this
     private suspend fun FcitxAPI.commitAndReset() {
         if (inputMethodEntryCached.languageCode.startsWith("zh")) {
@@ -180,6 +207,14 @@ class CommonKeyActionListener :
                             toggleIme()
                         }
                         SpaceLongPressBehavior.ShowPicker -> showInputMethodPicker()
+                        SpaceLongPressBehavior.VoiceInput -> {
+                            startVoiceRecognition()
+                        }
+                    }
+                }
+                is KeyAction.SpaceLongPressReleaseAction -> {
+                    if (spaceKeyLongPressBehavior == SpaceLongPressBehavior.VoiceInput) {
+                        stopVoiceRecognition()
                     }
                 }
                 else -> {}

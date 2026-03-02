@@ -202,6 +202,7 @@
     <string name="space_behavior_enumerate">Enumerate input methods</string>
     <string name="space_behavior_activate">Toggle input method activate state</string>
     <string name="space_behavior_picker">Show input method picker dialog</string>
+    <string name="space_behavior_voice_input">Voice input</string>
     <string name="show_lang_switch_key">Show language switch key</string>
     <string name="horizontal_candidate_style">Horizontal candidate style</string>
     <string name="horizontal_candidate_never_fill">Never fill width</string>
@@ -368,4 +369,15 @@
     
     <!-- Handwriting -->
     <string name="enable_handwriting">Enable Handwriting</string>
+
+    <!-- Voice Input -->
+    <string name="voice_input_settings">Voice Input Settings</string>
+    <string name="voice_input_mode">Voice Input Mode</string>
+    <string name="voice_input_mode_click">Click Mode</string>
+    <string name="voice_input_mode_long_press">Long Press Mode</string>
+    <string name="dashscope_api_key">DashScope API Key</string>
+    <string name="dashscope_api_key_summary">Model: qwen3-asr-flash-realtime\nCreate API Key: https://modelstudio.console.alibabacloud.com/</string>
+    <string name="dashscope_region">Service Region</string>
+    <string name="dashscope_region_cn">Mainland China</string>
+    <string name="dashscope_region_intl">International</string>
 </resources>

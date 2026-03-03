@@ -98,6 +98,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     private lateinit var decorView: View
     private lateinit var contentView: FrameLayout
+    var activeInputView: InputView? = null
+        private set
     private var inputView: InputView? = null
     private var candidatesView: CandidatesView? = null
 
@@ -146,6 +148,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         setInputView(newInputView)
         inputDeviceMgr.setInputView(newInputView)
         inputView = newInputView
+        activeInputView = newInputView
         return newInputView
     }
 

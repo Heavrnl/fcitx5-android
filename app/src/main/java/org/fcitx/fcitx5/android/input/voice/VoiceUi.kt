@@ -51,7 +51,7 @@ class VoiceUi(override val ctx: Context, private val theme: Theme) : Ui {
 
     val recordButton = imageView {
         setImageResource(R.drawable.ic_baseline_keyboard_voice_24)
-        imageTintList = ColorStateList.valueOf(theme.accentKeyTextColor)
+        imageTintList = ColorStateList.valueOf(0xFFFFFFFF.toInt())
         
         val content = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
@@ -114,17 +114,22 @@ class VoiceUi(override val ctx: Context, private val theme: Theme) : Ui {
     }
 
     private var colorAnimator: ValueAnimator? = null
-    private var iconColorAnimator: ValueAnimator? = null
 
-    fun setRecordingState(isRecording: Boolean) {
+    fun setRecordingState(isRecording: Boolean, animate: Boolean = true) {
         val nextBgColor = if (isRecording) 0xFFE53935.toInt() else theme.accentKeyBackgroundColor
-        val nextIconColor = if (isRecording) 0xFFFFFFFF.toInt() else theme.accentKeyTextColor
         
+        if (!animate) {
+            colorAnimator?.cancel()
+            recordButton.animate().cancel()
+            ((recordButton.background as? RippleDrawable)?.getDrawable(0) as? GradientDrawable)?.setColor(nextBgColor)
+            recordButton.scaleX = 1f
+            recordButton.scaleY = 1f
+            return
+        }
+
         val currentBgColor = ((recordButton.background as? RippleDrawable)?.getDrawable(0) as? GradientDrawable)?.color?.defaultColor ?: theme.accentKeyBackgroundColor
-        val currentIconColor = recordButton.imageTintList?.defaultColor ?: theme.accentKeyTextColor
 
         colorAnimator?.cancel()
-        iconColorAnimator?.cancel()
 
         // 颜色切换增加弹性插值器
         val bounceInterpolator = OvershootInterpolator(1.5f)
@@ -139,16 +144,6 @@ class VoiceUi(override val ctx: Context, private val theme: Theme) : Ui {
             start()
         }
 
-        iconColorAnimator = ValueAnimator.ofObject(ArgbEvaluator(), currentIconColor, nextIconColor).apply {
-            duration = 400
-            interpolator = bounceInterpolator
-            addUpdateListener { animator ->
-                val color = animator.animatedValue as Int
-                recordButton.imageTintList = ColorStateList.valueOf(color)
-            }
-            start()
-        }
-
         // Q弹缩放反馈
         recordButton.animate()
             .scaleX(1.15f)
@@ -159,7 +154,7 @@ class VoiceUi(override val ctx: Context, private val theme: Theme) : Ui {
                 recordButton.animate()
                     .scaleX(1.0f)
                     .scaleY(1.0f)
-                    .setDuration(200)
+                    .setDuration(250)
                     .setInterpolator(OvershootInterpolator(1.5f))
                     .start()
             }

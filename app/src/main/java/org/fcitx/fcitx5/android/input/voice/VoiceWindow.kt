@@ -146,7 +146,7 @@ class VoiceWindow(private val startImmediately: Boolean = false) : InputWindow.E
         } else {
             isRecording = false
             ui.statusText.text = getIdleHintText()
-            ui.setRecordingState(false)
+            ui.setRecordingState(false, animate = false)
         }
     }
 

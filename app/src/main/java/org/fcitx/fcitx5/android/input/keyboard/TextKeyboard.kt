@@ -20,9 +20,12 @@ import org.fcitx.fcitx5.android.input.picker.PickerWindow
 import org.fcitx.fcitx5.android.input.popup.PopupAction
 import org.fcitx.fcitx5.android.input.handwriting.HandwritingEngine
 import org.fcitx.fcitx5.android.input.keyboard.HandwritingOverlayView
+import android.content.ContextWrapper
+import org.fcitx.fcitx5.android.input.FcitxInputMethodService
 import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.os.SystemClock
+import org.fcitx.fcitx5.android.input.keyboard.KeyAction
 import splitties.views.imageResource
 import kotlin.math.abs
 
@@ -120,7 +123,7 @@ class TextKeyboard(
     private val longPressTimeout by lazy { ViewConfiguration.getLongPressTimeout().toLong() }
     
     // 手写触发的短按停顿阈值（150ms，比长按短，足以区分瞬间按压滑动）
-    private val writingTriggerDelay = 150L
+    private val writingTriggerDelay = 100L
 
     // 手写拦截状态机
     private var isWriting = false
@@ -130,12 +133,55 @@ class TextKeyboard(
     private var isMultiTouch = false
     private var isSwipeIgnored = false // 这个触摸序列是否已被定性为普通的快速 Swipe（输入符号）
 
+    // 悬而未决的候选词
+    private var pendingHandwritingCandidates: List<String>? = null
+
+    private val fcitxService: FcitxInputMethodService? by lazy {
+        var ctx = context
+        while (ctx is ContextWrapper) {
+            if (ctx is FcitxInputMethodService) break
+            ctx = ctx.baseContext
+        }
+        ctx as? FcitxInputMethodService
+    }
+
+    private fun clearHandwritingCandidates() {
+        pendingHandwritingCandidates = null
+        fcitxService?.activeInputView?.updateHandwritingCandidates(emptyList(), null)
+    }
+
+    private fun commitPendingHandwriting() {
+        pendingHandwritingCandidates?.let {
+            if (it.isNotEmpty()) {
+                onAction(KeyAction.CommitAction(it[0]))
+            }
+        }
+        clearHandwritingCandidates()
+    }
+
     private val handwritingOverlay: HandwritingOverlayView by lazy {
         HandwritingOverlayView(context, handwritingEngine) { results ->
             if (results.isNotEmpty()) {
                 val bestMatch = results[0]
-                // 暂时使用 CommitAction 直接上屏手写首选字
-                onAction(KeyAction.CommitAction(bestMatch))
+                // 首选项不再直接上屏，而是设置给输入框作为带有下划线的 Composing
+                fcitxService?.currentInputConnection?.setComposingText(bestMatch, 1)
+                
+                // 记录状态，并在候选条上展示全量候选
+                pendingHandwritingCandidates = results
+                
+                if (results.size > 1) {
+                    fcitxService?.activeInputView?.updateHandwritingCandidates(results) { text, index ->
+                        if (pendingHandwritingCandidates != null) {
+                            // 由于处于 composing 状态，CommitAction 会直接覆盖 ComposingText
+                            onAction(KeyAction.CommitAction(text))
+                            clearHandwritingCandidates()
+                        }
+                    }
+                } else {
+                    fcitxService?.activeInputView?.updateHandwritingCandidates(emptyList(), null)
+                }
+            } else {
+                clearHandwritingCandidates()
             }
         }
     }
@@ -168,6 +214,11 @@ class TextKeyboard(
     private fun transformPunctuation(p: String) = punctuationMapping.getOrDefault(p, p)
 
     override fun onAction(action: KeyAction, source: KeyActionListener.Source) {
+        // 如果将要执行其他按键动作（非点选手写候选引起的），且当前有悬而未决的手写候选，则提交首选项并清理状态。
+        if (action !is KeyAction.CommitAction && pendingHandwritingCandidates != null) {
+            commitPendingHandwriting()
+        }
+
         var transformed = action
         when (action) {
             is KeyAction.FcitxKeyAction -> when (source) {
@@ -229,6 +280,10 @@ class TextKeyboard(
                     handwritingOverlay.startWriting(startX, startY, touchStartTime)
                     return true
                 } else {
+                    // 如果存在上一次未确认的手写候选，说明用户想继续新的一轮手写输入
+                    if (pendingHandwritingCandidates != null) {
+                        commitPendingHandwriting()
+                    }
                     isWriting = false
                     // 干净状况：立即放行第一指接触，赋予底盘按键首发感应（譬如长按弹出小窗或点亮背景）
                     super.dispatchTouchEvent(ev)

@@ -35,6 +35,7 @@ import org.fcitx.fcitx5.android.input.keyboard.CommonKeyActionListener
 import org.fcitx.fcitx5.android.input.keyboard.KeyboardWindow
 import org.fcitx.fcitx5.android.input.picker.emojiPicker
 import org.fcitx.fcitx5.android.input.picker.emoticonPicker
+import org.fcitx.fcitx5.android.input.handwriting.HandwritingCandidateBar
 import org.fcitx.fcitx5.android.input.picker.symbolPicker
 import org.fcitx.fcitx5.android.input.popup.PopupComponent
 import org.fcitx.fcitx5.android.input.preedit.PreeditComponent
@@ -109,6 +110,24 @@ class InputView(
     private val symbolPicker = symbolPicker()
     private val emojiPicker = emojiPicker()
     private val emoticonPicker = emoticonPicker()
+
+    private var onHandwritingCandidateSelected: ((String, Int) -> Unit)? = null
+
+    val handwritingCandidateBar = HandwritingCandidateBar(context, theme) { text, index ->
+        onHandwritingCandidateSelected?.invoke(text, index)
+    }.apply { 
+        visibility = View.GONE 
+    }
+
+    fun updateHandwritingCandidates(candidates: List<String>, listener: ((String, Int) -> Unit)?) {
+        onHandwritingCandidateSelected = listener
+        if (candidates.isEmpty()) {
+            handwritingCandidateBar.visibility = View.GONE
+        } else {
+            handwritingCandidateBar.setCandidates(candidates)
+            handwritingCandidateBar.visibility = View.VISIBLE
+        }
+    }
 
     private fun setupScope() {
         scope += this@InputView.wrapToUniqueComponent()
@@ -221,6 +240,10 @@ class InputView(
                 centerHorizontally()
             })
             add(kawaiiBar.view, lParams(matchParent, dp(KawaiiBarComponent.HEIGHT)) {
+                below(quickPhraseSuggestion.ui.root)
+                centerHorizontally()
+            })
+            add(handwritingCandidateBar, lParams(matchParent, dp(KawaiiBarComponent.HEIGHT)) {
                 below(quickPhraseSuggestion.ui.root)
                 centerHorizontally()
             })

@@ -75,6 +75,7 @@ import org.fcitx.fcitx5.android.input.popup.PopupComponent
 import org.fcitx.fcitx5.android.input.status.StatusAreaWindow
 import org.fcitx.fcitx5.android.input.wm.InputWindow
 import org.fcitx.fcitx5.android.input.wm.InputWindowManager
+import org.fcitx.fcitx5.android.input.wm.windows.ToolbarEditWindow
 import org.fcitx.fcitx5.android.utils.AppUtil
 import org.fcitx.fcitx5.android.utils.InputMethodUtil
 import org.mechdancer.dependency.DynamicScope
@@ -118,6 +119,8 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private var isCapabilityFlagsPassword: Boolean = false
     private var isKeyboardLayoutNumber: Boolean = false
     private var isToolbarManuallyToggled: Boolean = false
+    private var isEditingToolbar: Boolean = false
+    private var currentEditWindow: ToolbarEditWindow? = null
 
     @Keep
     private val onClipboardUpdateListener =
@@ -237,6 +240,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     }
 
     private fun evalIdleUiState(fromUser: Boolean = false) {
+        if (isEditingToolbar) return // 编辑期间不响应外部状态（如剪贴板）对 IdleUi 状态栏的干扰
         val newState = when {
             isClipboardFresh -> IdleUi.State.Clipboard
             isInlineSuggestionPresent -> IdleUi.State.InlineSuggestion
@@ -256,6 +260,10 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     }
 
     private val hideKeyboardCallback = View.OnClickListener {
+        if (isEditingToolbar) {
+            exitToolbarEditMode()
+            return@OnClickListener
+        }
         service.requestHideSelf(0)
     }
 
@@ -269,6 +277,10 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private var voiceInputSubtype: Pair<String, InputMethodSubtype>? = null
 
     private val switchToVoiceInputCallback = View.OnClickListener {
+        if (isEditingToolbar) {
+            exitToolbarEditMode()
+            return@OnClickListener
+        }
         val (id, subtype) = voiceInputSubtype ?: return@OnClickListener
         InputMethodUtil.switchInputMethod(service, id, subtype)
     }
@@ -276,6 +288,10 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private val idleUi: IdleUi by lazy {
         IdleUi(context, theme, popup, commonKeyActionListener).apply {
             menuButton.setOnClickListener {
+                if (isEditingToolbar) {
+                    exitToolbarEditMode()
+                    return@setOnClickListener
+                }
                 when (idleUi.currentState) {
                     IdleUi.State.Empty -> {
                         isToolbarManuallyToggled = !expandToolbarByDefault
@@ -323,6 +339,16 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
                 moreButton.setOnClickListener {
                     windowManager.attachWindow(StatusAreaWindow())
                 }
+
+                // 绑定拖拽开启的编辑模式
+                onEditActionRequested = {
+                    startToolbarEditMode()
+                }
+
+                // 绑定直接点减号送到仓库
+                onButtonRemoved = { key ->
+                    currentEditWindow?.catchDroppedButtonFromTop(key)
+                }
             }
             clipboardUi.suggestionView.apply {
                 setOnClickListener {
@@ -369,6 +395,71 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
                 }
             }
         }
+    }
+
+    private fun startToolbarEditMode() {
+        val allButtonsArray = mapOf(
+            "undo" to idleUi.buttonsUi.undoButton,
+            "redo" to idleUi.buttonsUi.redoButton,
+            "cursorMove" to idleUi.buttonsUi.cursorMoveButton,
+            "clipboard" to idleUi.buttonsUi.clipboardButton,
+            "quickPhrase" to idleUi.buttonsUi.quickPhraseButton,
+            "more" to idleUi.buttonsUi.moreButton,
+            "voice" to idleUi.buttonsUi.voiceButton
+        )
+
+        // 屏蔽键盘切换、展开按钮等（可选，暂直接改变状态）
+        isEditingToolbar = true
+        idleUi.buttonsUi.isEditMode = true
+
+        val hiddenPref = prefs.internal.buttonsBarHidden.getValue()
+        val hiddens = if (hiddenPref.isEmpty()) emptyList() else hiddenPref.split(",")
+        // 显示 Toolbar Edit Window
+        val window = ToolbarEditWindow(allButtonsArray, hiddens) { action, addedKeys, newHiddenKeys ->
+            when (action) {
+                ToolbarEditWindow.Action.SAVE -> {
+                    // 读取上方保留的 order
+                    val newOrder = mutableListOf<String>()
+                    val flexbox = idleUi.buttonsUi.root as com.google.android.flexbox.FlexboxLayout
+                    for (i in 0 until flexbox.childCount) {
+                        (flexbox.getChildAt(i).tag as? String)?.let { newOrder.add(it) }
+                    }
+                    prefs.internal.buttonsBarOrder.setValue(newOrder.joinToString(","))
+                    prefs.internal.buttonsBarHidden.setValue(newHiddenKeys?.joinToString(",") ?: "")
+                    exitToolbarEditMode()
+                }
+                ToolbarEditWindow.Action.RESET -> {
+                    // 恢复成系统默认
+                    prefs.internal.buttonsBarOrder.setValue("undo,redo,cursorMove,clipboard,quickPhrase,voice,more")
+                    prefs.internal.buttonsBarHidden.setValue("")
+                    exitToolbarEditMode()
+                }
+                ToolbarEditWindow.Action.CANCEL -> {
+                    exitToolbarEditMode()
+                }
+                ToolbarEditWindow.Action.ADD_TO_TOP -> {
+                    // 底下仓库图标点了加号，上浮
+                    addedKeys?.firstOrNull()?.let {
+                        idleUi.buttonsUi.catchAddedButtonFromBottom(it)
+                    }
+                }
+            }
+        }
+        currentEditWindow = window
+        windowManager.attachWindow(window)
+        // 强制进入编辑模式后显示工具条本身
+        idleUi.updateState(IdleUi.State.Toolbar)
+    }
+
+    private fun exitToolbarEditMode() {
+        currentEditWindow = null
+        isEditingToolbar = false
+        idleUi.buttonsUi.isEditMode = false
+        // 从 Prefs 重新装载 UI 到 idleUi
+        idleUi.buttonsUi.loadButtonsFromPrefs()
+        // 恢复键盘
+        windowManager.attachWindow(KeyboardWindow)
+        evalIdleUiState(true)
     }
 
     private val candidateUi by lazy {
@@ -459,7 +550,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     override val view by lazy {
         ViewAnimator(context).apply {
             backgroundColor =
-                if (ThemeManager.prefs.keyBorder.getValue()) Color.TRANSPARENT
+                if (ThemeManager.prefs.keyBorder.getValue()) android.graphics.Color.TRANSPARENT
                 else theme.barColor
             
             add(idleUi.root, lParams(matchParent, matchParent))
@@ -516,8 +607,8 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
 
     fun hideVoiceListening() {
         if (view.displayedChild == 3) {
-            val startColor = (view.background as? ColorDrawable)?.color ?: theme.accentKeyBackgroundColor
-            val endColor = if (ThemeManager.prefs.keyBorder.getValue()) Color.TRANSPARENT
+            val startColor = (view.background as? android.graphics.drawable.ColorDrawable)?.color ?: theme.accentKeyBackgroundColor
+            val endColor = if (ThemeManager.prefs.keyBorder.getValue()) android.graphics.Color.TRANSPARENT
                           else theme.barColor
             
             barBgColorAnimator?.cancel()
@@ -589,6 +680,13 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     }
 
     override fun onWindowDetached(window: InputWindow) {
+        if (window is ToolbarEditWindow) {
+            if (isEditingToolbar) {
+                // 如果 ToolbarEditWindow 被外部（如点击空白处关闭）卸载，并且我们还在编辑模式中
+                // 那么意味着它是取消/或者自然销毁，我们需要退出编辑模式
+                exitToolbarEditMode()
+            }
+        }
         barStateMachine.push(WindowDetached)
     }
 

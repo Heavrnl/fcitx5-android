@@ -76,6 +76,11 @@ class StatusAreaWindow : InputWindow.ExtendedInputWindow<StatusAreaWindow>(),
                 context.getString(R.string.virtual_keyboard),
                 R.drawable.ic_baseline_keyboard_24,
                 Keyboard
+            ),
+            StatusAreaEntry.Android(
+                "手写板",
+                R.drawable.ic_baseline_edit_24,
+                StatusAreaEntry.Android.Type.HandwritingBoard
             )
         )
     }
@@ -152,6 +157,13 @@ class StatusAreaWindow : InputWindow.ExtendedInputWindow<StatusAreaWindow>(),
                         }
                         Keyboard -> AppUtil.launchMainToKeyboard(context)
                         ThemeList -> AppUtil.launchMainToThemeList(context)
+                        StatusAreaEntry.Android.Type.HandwritingBoard -> {
+                            // 先切回键盘视图（会自动 detach 本状态窗口），再通知键盘进入手写板模式
+                            windowManager.attachWindow(
+                                org.fcitx.fcitx5.android.input.keyboard.KeyboardWindow
+                            )
+                            org.fcitx.fcitx5.android.input.keyboard.HandwritingBoardBus.requestOpen()
+                        }
                     }
                 }
             }

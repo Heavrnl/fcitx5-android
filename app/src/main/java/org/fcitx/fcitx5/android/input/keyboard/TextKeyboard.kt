@@ -110,6 +110,11 @@ class TextKeyboard(
             handwritingOverlay.cancelWriting()
             isWriting = false
         }
+        if (!v) {
+            // 关闭手写时同步退出手写板模式，清掉候选
+            handwritingOverlay.setBoardMode(false)
+            clearHandwritingCandidates()
+        }
         handwritingOverlay.visibility = if (v) View.VISIBLE else View.GONE
     }
 
@@ -270,6 +275,26 @@ class TextKeyboard(
                 touchStartTime = t
                 isMultiTouch = false
                 isSwipeIgnored = false
+
+                // —— 手写板（显式按钮）模式：优先于一切按键处理 ——
+                if (handwritingOverlay.isBoardMode()) {
+                    if (handwritingOverlay.isExitButtonHit(x, y)) {
+                        // 点了「✕ 退出手写板」：回到普通键盘
+                        handwritingOverlay.setBoardMode(false)
+                        clearHandwritingCandidates()
+                        return true
+                    }
+                    // 板内直接落笔，无需停顿判定
+                    isWriting = true
+                    handwritingOverlay.startWriting(startX, startY, touchStartTime)
+                    return true
+                }
+                // 透明模式：点右上角「手写板」入口按钮 → 进入手写板
+                if (handwritingOverlay.isEntryButtonHit(x, y)) {
+                    handwritingOverlay.setBoardMode(true)
+                    return true
+                }
+
                 handwritingOverlay.resetRecognizeJob()
 
                 if (handwritingOverlay.hasInk()) {
@@ -374,6 +399,17 @@ class TextKeyboard(
         capsState = CapsState.None
         updateCapsButtonIcon()
         updateAlphabetKeys()
+        // 响应「三个点 → 手写板」入口（StatusAreaWindow → KeyboardWindow → 这里）
+        HandwritingBoardBus.listener = {
+            if (enableHandwriting) {
+                handwritingOverlay.setBoardMode(true)
+            }
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        HandwritingBoardBus.listener = null
+        super.onDetachedFromWindow()
     }
 
     override fun onReturnDrawableUpdate(returnDrawable: Int) {
